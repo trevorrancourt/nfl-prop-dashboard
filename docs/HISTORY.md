@@ -3220,3 +3220,9 @@ Now `matchupMismatch()` compares the raw team value with that offense's usual fr
 
 - Swift Rush Att at 16.5/17.5 → ❓ ("allowed BAL #5 28 (usually 24.3)"). Rush Yds → ❓ ("allowed BAL #5 175 (usually 90.7)").
 - Sim (Wk 2-5, lines at median): 127 picks → ❓ (was 56); tiers [none,1,2,3,MUST] [1324,84,142,83,39]. Lines at 25th pct: 118 → ❓.
+
+## Player popup: "This week" + "His avg" rows (2026-10-16)
+
+Trevor: "on their game by game section, show their current week opponent and averages and stuff similar to how you did that on the defense popups". The player popup's Game-by-game table now has:
+- **Top row** (`upcoming-row`, same style as the defense popup): "This week @OPP (they allow to all RBs)". For each stat it shows the opponent's per-game allowed to the position (`def_avg_allowed`), its rank chip (`oppRankChip`, 1 = toughest), and the current best line.
+- **"His avg (N games)" row** above "Avg opp rank faced", averaged over the played games shown (DNP weeks excluded).

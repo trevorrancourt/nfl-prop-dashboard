@@ -3718,6 +3718,21 @@ function openPlayerModal(playerName) {{
   ].sort((a, b) => b.week - a.week); // most-recent-first, matching game_log's own order
 
   let gameRowsHtml = '';
+  // "This week" row on top (added 2026-10-16, per Trevor: "show their current
+  // week opponent and averages and stuff similar to how you did that on the
+  // defense popups"): what this week's defense allows per game to his
+  // position for each stat, its rank (same chip as the games below, 1 =
+  // toughest), and the current best line.
+  if (first.opponent) {{
+    let up = `<td><strong>This week ${{first.at_opponent ? '@' : 'vs '}}${{escapeHtml(first.opponent)}}</strong> <span class="muted" title="Per game, to ALL of their opponents' ${{escapeHtml(first.position)}}s combined -- not just one player.">(they allow to all ${{escapeHtml(first.position)}}s)</span></td>`;
+    for (const r of playerRows) {{
+      const a = r.def_avg_allowed;
+      const line = (r.best_line !== null && r.best_line !== undefined) ? r.best_line : r.vegas_line;
+      up += `<td>${{fmt(a === null || a === undefined ? null : Math.round(a * 10) / 10)}}${{oppRankChip(r, first.opponent)}}`
+        + (line !== null && line !== undefined ? `<div class="muted" style="font-size:11px;">line ${{line}}</div>` : '') + `</td>`;
+    }}
+    gameRowsHtml += `<tr class="upcoming-row">${{up}}</tr>`;
+  }}
   for (const entry of gameEntries) {{
     if (entry.idx === null) {{
       const dnpCells = '<td class="muted">DNP</td>'.repeat(playerRows.length);
@@ -3751,7 +3766,13 @@ function openPlayerModal(playerName) {{
     const max = Object.keys(info.ranks).length;
     avgRankCells += `<td><span class="opp-rank-chip" ${{rankStyle(Math.round(avg), max)}}>#${{avg}}</span></td>`;
   }}
-  const avgRankRow = gameIdx.length ? `<tr class="opp-rank-avg">${{avgRankCells}}</tr>` : '';
+  // His average per stat over the games above (DNP weeks don't count).
+  let hisAvgCells = `<td class="muted">His avg (${{gameIdx.length}} game${{gameIdx.length === 1 ? '' : 's'}})</td>`;
+  for (const r of playerRows) {{
+    const vs = gameIdx.map(i => r.game_log[i]).filter(v => v !== null && v !== undefined);
+    hisAvgCells += `<td>${{vs.length ? fmt(Math.round(vs.reduce((a, b) => a + b, 0) / vs.length * 10) / 10) : '<span class="muted">-</span>'}}</td>`;
+  }}
+  const avgRankRow = gameIdx.length ? `<tr class="opp-rank-avg">${{hisAvgCells}}</tr><tr class="opp-rank-avg">${{avgRankCells}}</tr>` : '';
 
   document.getElementById('modalBody').innerHTML = `
     <div class="modal-table-wrap">
