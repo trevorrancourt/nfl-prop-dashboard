@@ -1607,9 +1607,16 @@ function validBetLine(s) {{
 }}
 // American odds: -110, +125, 120 (no sign = plus). Anything between -99
 // and +99 isn't a real American price, so it's flagged.
+// Odds boxes use the normal keyboard, since a phone's number pad has no
+// minus key (2026-10-16, per Trevor: "on mobile, i can't add a minus before
+// the odds"). Phones can also swap a typed minus for a long dash, so
+// those count as a minus too.
+function normOdds(s) {{
+  return String(s === undefined || s === null ? '' : s).trim().replace(/^[\u2212\u2013\u2014]/, '-');
+}}
 function validBetOdds(s) {{
   if (s === undefined || s === '') return true;
-  const t = String(s).trim();
+  const t = normOdds(s);
   return /^[+-]?\d+$/.test(t) && Math.abs(parseInt(t, 10)) >= 100;
 }}
 
@@ -1626,7 +1633,7 @@ function betSlip(r) {{
   return `<div class="bet-slip" data-bet-key="${{escapeHtml(key)}}" title="What you actually got on this bet -- saved in this browser only.">
     <select class="bet-field" data-field="side">${{sideOpt('', 'O/U')}}${{sideOpt('over', 'Over')}}${{sideOpt('under', 'Under')}}</select>
     <input class="bet-field bet-line${{validBetLine(b.line) ? '' : ' bet-bad'}}" data-field="line" inputmode="decimal" placeholder="${{hintLine === null || hintLine === undefined ? 'line' : hintLine}}" value="${{escapeHtml(b.line || '')}}" aria-label="Line you got">
-    <input class="bet-field bet-odds${{validBetOdds(b.odds) ? '' : ' bet-bad'}}" data-field="odds" inputmode="numeric" placeholder="${{hintOdds}}" value="${{escapeHtml(b.odds || '')}}" aria-label="Odds you got">
+    <input class="bet-field bet-odds${{validBetOdds(b.odds) ? '' : ' bet-bad'}}" data-field="odds" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="${{hintOdds}}" value="${{escapeHtml(b.odds || '')}}" aria-label="Odds you got">
     <input class="bet-field bet-stake${{validBetStake(b.stake) ? '' : ' bet-bad'}}" data-field="stake" inputmode="decimal" placeholder="$" value="${{escapeHtml(b.stake || '')}}" aria-label="Dollar amount you bet">
     <span class="bet-towin muted">${{toWinLabel(b)}}</span>
   </div>`;
@@ -1639,7 +1646,7 @@ function handleBetField(el) {{
   if (!slip) return;
   const key = slip.dataset.betKey;
   const field = el.dataset.field;
-  const v = el.value.trim();
+  const v = field === 'odds' ? normOdds(el.value) : el.value.trim();
   const b = BETS[key] || {{}};
   if (v) b[field] = v; else delete b[field];
   BETS[key] = b;
@@ -1679,7 +1686,7 @@ function parseStake(s) {{
 }}
 function parseOdds(s) {{
   if (s === undefined || s === '' || !validBetOdds(s)) return null;
-  return parseInt(String(s).trim(), 10);
+  return parseInt(normOdds(s), 10);
 }}
 // Profit if the bet wins (stake not included), from American odds.
 function winAmount(stake, odds) {{
@@ -1974,7 +1981,7 @@ function openMyBetsModal() {{
       <td>${{weekIn}}${{what}}</td>
       <td>${{sideSel}}</td>
       <td>${{lineIn}}</td>
-      <td><input class="bet-field bet-odds${{validBetOdds(b.odds) ? '' : ' bet-bad'}}" data-field="odds" inputmode="numeric" value="${{escapeHtml(b.odds || '')}}" placeholder="odds"></td>
+      <td><input class="bet-field bet-odds${{validBetOdds(b.odds) ? '' : ' bet-bad'}}" data-field="odds" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="${{escapeHtml(b.odds || '')}}" placeholder="odds"></td>
       <td><input class="bet-field bet-stake${{validBetStake(b.stake) ? '' : ' bet-bad'}}" data-field="stake" inputmode="decimal" value="${{escapeHtml(b.stake || '')}}" placeholder="$"></td>
       <td class="bet-towin muted">${{toWinLabel(b).replace('to win ', '')}}</td>
       <td class="bet-market">${{marketCellHtml(x)}}</td>
@@ -2137,7 +2144,7 @@ function parlayBuilderHtml() {{
     <div style="margin-bottom:6px;"><strong>&#128279; Build a parlay</strong> <span class="muted">-- tick the legs you combined, then the odds you got.</span>${{usedNote}}</div>
     <div class="modal-table-wrap"><table class="modal-table"><tbody>${{rows}}</tbody></table></div>
     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:6px;">
-      <input id="parlayOdds" class="bet-odds" inputmode="numeric" placeholder="odds e.g. +450" style="width:110px;">
+      <input id="parlayOdds" class="bet-odds" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="odds e.g. +450" style="width:110px;">
       <input id="parlayStake" class="bet-stake" inputmode="decimal" placeholder="$ stake" style="width:80px;">
       <button type="button" class="weeks-mini-btn" id="parlayAdd">Add parlay</button>
       <span id="parlayMsg" class="muted"></span>
@@ -2148,7 +2155,7 @@ function addParlayFromBuilder() {{
   const msg = document.getElementById('parlayMsg');
   const picked = Array.from(document.querySelectorAll('tr[data-leg-key]')).filter(tr => tr.querySelector('.parlay-pick').checked);
   if (picked.length < 2) {{ msg.textContent = 'Tick at least 2 legs.'; return; }}
-  const odds = document.getElementById('parlayOdds').value.trim();
+  const odds = normOdds(document.getElementById('parlayOdds').value);
   const stake = document.getElementById('parlayStake').value.trim();
   if (!odds || !validBetOdds(odds)) {{ msg.textContent = 'Enter the parlay odds, like +450 or -110.'; return; }}
   if (stake && !validBetStake(stake)) {{ msg.textContent = 'Stake should be a dollar amount.'; return; }}

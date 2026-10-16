@@ -3261,3 +3261,7 @@ Trevor: "make a new status for parlay ... don't add it to my bets ... unless you
 - The "Add a bet by hand" button now says "(ladder, anything)".
 - **Tested headlessly:** the dropdown has 🔗; parlay rows are excluded from singles; error messages for no legs / no odds; parlay saved with 2 week-5 legs (Swift O 40.5 had 43 ✅, Allgeier U 5.5 had 7 ❌) → looks L → Fill suggested = Loss, -$10.
 - Then, per Trevor ("once they're added to a parlay in there can you take them out of the build queue?"): legs already used in a parlay are hidden from the builder (`parlayShowUsed` false by default), with "N legs already in a parlay hidden · show" to bring them back for reuse. When every 🔗 leg is used, the box says so.
+
+## Minus sign in odds on mobile (2026-10-16)
+
+Trevor: "on mobile, i can't add a minus before the odds". The odds boxes (row bet slip, My Bets, parlay builder) used `inputmode="numeric"`, and the iPhone number pad has no minus key. They now use `inputmode="text"` (autocorrect/caps/spellcheck off), so the 123 keyboard has "-". `normOdds()` turns a leading unicode minus or en/em dash (iOS smart punctuation) into "-" before validating and saving. Tested on an emulated iPhone 13: "−115" → -115, "-120" → -120 (to win $10 on $12), parlay "–110" → -110.
