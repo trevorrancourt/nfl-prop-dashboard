@@ -94,6 +94,7 @@ It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of
 - Columns: `nfl_prop_dashboard_cols_v1`
 - Filter checkboxes (Hide ❓, Ladder, Weak/Strong matchup): `nfl_prop_dashboard_filters_v1`. Hide ❌ rows always loads ticked (per Trevor).
 - My Bets has Backup/Restore (JSON).
+- 🔗 Parlay mark (`MARKS[key]='parlay'`) isn't a single bet; My Bets' "Build a parlay" box turns ticked 🔗 legs + odds into one manual bet with `legs` (looks W/L from the legs).
 - **Login so bets sync across devices: live 2026-10-16** (Supabase project `ugyxzhdcmzqhibajtbwa`; URL + anon key at the top of `build_dashboard.py`). Look for "Sign-in + cross-device sync" in the template. The merge is three-way against the last synced copy (`nfl_prop_dashboard_sync_base_v1|<user id>`), and writes are conditional on `updated_at` so two devices can't overwrite each other. Not available on the Mac's file:// copy. The plan Trevor agreed to:
   - **Supabase** (free) handles email magic-link sign-in, plus one table holding each user's marks and bets.
   - The site keeps working logged-out with localStorage. On first login, local marks/bets are merged into the account.

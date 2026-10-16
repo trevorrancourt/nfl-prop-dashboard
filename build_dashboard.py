@@ -1953,10 +1953,10 @@ function openMyBetsModal() {{
       lastWeek = x.week;
     }}
     const actual = betActual(x);
-    const sug = suggestedResult(x, actual);
+    const sug = b.legs ? parlaySuggestion(b) : suggestedResult(x, actual);
     let what;
     if (x.manual) {{
-      what = `<input class="bet-field bet-desc" data-field="desc" value="${{escapeHtml(b.desc || '')}}" placeholder="e.g. Nix + Stafford INT parlay">`;
+      what = `<input class="bet-field bet-desc" data-field="desc" value="${{escapeHtml(b.desc || '')}}" placeholder="e.g. Nix + Stafford INT parlay">` + (b.legs ? parlayLegsHtml(b) : '');
     }} else {{
       const m = b.meta || parseBetKey(x.key);
       const opp = m.opp ? (m.at === true ? ' @' : (m.at === false ? ' vs ' : ' vs ')) + m.opp : '';
@@ -1993,10 +1993,11 @@ function openMyBetsModal() {{
     </div>
     <div id="betsSummary"></div>
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin: 10px 0;">
-      <button type="button" class="weeks-mini-btn" id="betsAddManual">+ Add a bet by hand (parlay, ladder, anything)</button>
+      <button type="button" class="weeks-mini-btn" id="betsAddManual">+ Add a bet by hand (ladder, anything)</button>
       <button type="button" class="weeks-mini-btn" id="betsFillSuggested" title="Sets Win/Loss/Push on every still-Pending bet that has a 'looks W/L' hint. You can change any of them after.">Fill in suggested results</button>
       <button type="button" class="weeks-mini-btn" id="betsBackup">Backup / restore</button>
     </div>
+    ${{parlayBuilderHtml()}}
     <div id="betsBackupPanel" style="display:none; margin-bottom:10px;">
       <div class="modal-note">Copy this text somewhere safe (Notes, email to yourself). To restore -- or to move your bets between the Mac dashboard and the shared link, which keep separate copies -- paste a backup here and click Restore; it merges, it doesn't delete anything.</div>
       <textarea id="betsBackupText" rows="5" style="width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:12px;"></textarea>
@@ -2078,8 +2079,103 @@ const MARK_OPTIONS = [
   {{ value: 'bet', label: '✅ Bet it' }},
   {{ value: 'watch', label: '🌕 Watching' }},
   {{ value: 'pass', label: '❌ Pass' }},
+  {{ value: 'parlay', label: '🔗 Parlay' }},
 ];
-const MARK_EMOJI = {{ bet: '✅', watch: '🌕', pass: '❌' }};
+const MARK_EMOJI = {{ bet: '✅', watch: '🌕', pass: '❌', parlay: '🔗' }};
+// ---- Parlays (added 2026-10-16, per Trevor: "make a new status for
+// parlay ... don't add it to my bets ... unless you have a way where i can
+// select which parlays i combined in the my bets screen and what odds i
+// got"). Rows marked 🔗 Parlay are NOT single bets. My Bets has a "Build a
+// parlay" box listing every 🔗 row: tick the legs, enter the odds/stake,
+// Add -- it becomes one manual bet with a `legs` list, tracked like any
+// other bet, with a looks-W/L hint from the legs' actual stats.
+function parlayLegCandidates() {{
+  const c = {{}};
+  const out = [];
+  for (const [key, v] of Object.entries(MARKS)) {{
+    if (v !== 'parlay') continue;
+    ensureBetMeta(key);
+    const m = BETS[key].meta;
+    const live = ROWS.find(r => markKey(r) === key);
+    let side = 'over', line = '';
+    if (live) {{
+      const e = enrichRow(live, selectedWeeks, c);
+      side = (e.cons && e.cons.side) || e.direction || 'over';
+      const mk = bestMarketFor(live, side);
+      line = mk ? mk.line : (live.vegas_line === null || live.vegas_line === undefined ? '' : live.vegas_line);
+    }}
+    const used = Object.entries(BETS).filter(([k, b]) => k.startsWith('manual|') && (b.legs || []).some(l => l.key === key)).length;
+    out.push({{ key, m, side, line, used }});
+  }}
+  out.sort((a, b) => (b.m.week - a.m.week) || String(a.m.kick || '9999').localeCompare(String(b.m.kick || '9999')) || a.m.player.localeCompare(b.m.player));
+  return out;
+}}
+function parlayBuilderHtml() {{
+  const legs = parlayLegCandidates();
+  if (!legs.length) {{
+    return '<div class="modal-note">&#128279; <strong>Build a parlay:</strong> mark rows &#128279; Parlay in the table and they show up here to combine. (Parlay rows aren&#39;t counted as single bets.)</div>';
+  }}
+  const sideOpt = (cur, v, label) => `<option value="${{v}}" ${{cur === v ? 'selected' : ''}}>${{label}}</option>`;
+  const rows = legs.map(l => `<tr data-leg-key="${{escapeHtml(l.key)}}">
+      <td><input type="checkbox" class="parlay-pick"></td>
+      <td><strong>${{escapeHtml(l.m.player)}}</strong> <span class="muted">${{escapeHtml(l.m.team)}}${{l.m.opp ? (l.m.at ? ' @' : ' vs ') + escapeHtml(l.m.opp) : ''}} &middot; Wk${{l.m.week}}</span> &middot; ${{escapeHtml(l.m.stat_label || statLabelFor(l.m.stat_col))}}</td>
+      <td><select class="parlay-side">${{sideOpt(l.side, 'over', 'Over')}}${{sideOpt(l.side, 'under', 'Under')}}</select></td>
+      <td><input class="parlay-line" inputmode="decimal" value="${{escapeHtml(String(l.line))}}" placeholder="line" style="width:60px;"></td>
+      <td class="muted">${{l.used ? 'in ' + l.used + ' parlay' + (l.used > 1 ? 's' : '') : ''}}</td>
+    </tr>`).join('');
+  return `<div style="border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:10px;">
+    <div style="margin-bottom:6px;"><strong>&#128279; Build a parlay</strong> <span class="muted">-- tick the legs you combined, then the odds you got.</span></div>
+    <div class="modal-table-wrap"><table class="modal-table"><tbody>${{rows}}</tbody></table></div>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:6px;">
+      <input id="parlayOdds" class="bet-odds" inputmode="numeric" placeholder="odds e.g. +450" style="width:110px;">
+      <input id="parlayStake" class="bet-stake" inputmode="decimal" placeholder="$ stake" style="width:80px;">
+      <button type="button" class="weeks-mini-btn" id="parlayAdd">Add parlay</button>
+      <span id="parlayMsg" class="muted"></span>
+    </div>
+  </div>`;
+}}
+function addParlayFromBuilder() {{
+  const msg = document.getElementById('parlayMsg');
+  const picked = Array.from(document.querySelectorAll('tr[data-leg-key]')).filter(tr => tr.querySelector('.parlay-pick').checked);
+  if (picked.length < 2) {{ msg.textContent = 'Tick at least 2 legs.'; return; }}
+  const odds = document.getElementById('parlayOdds').value.trim();
+  const stake = document.getElementById('parlayStake').value.trim();
+  if (!odds || !validBetOdds(odds)) {{ msg.textContent = 'Enter the parlay odds, like +450 or -110.'; return; }}
+  if (stake && !validBetStake(stake)) {{ msg.textContent = 'Stake should be a dollar amount.'; return; }}
+  const legs = picked.map(tr => {{
+    const key = tr.dataset.legKey;
+    ensureBetMeta(key);
+    const m = BETS[key].meta;
+    return {{ key, player: m.player, team: m.team, opp: m.opp, at: m.at, week: m.week, season: m.season || SEASON,
+      stat_col: m.stat_col, stat_label: m.stat_label || statLabelFor(m.stat_col),
+      side: tr.querySelector('.parlay-side').value, line: tr.querySelector('.parlay-line').value.trim() }};
+  }});
+  const desc = 'Parlay: ' + legs.map(l => `${{l.player}} ${{l.side === 'over' ? 'O' : 'U'}} ${{l.line}} ${{l.stat_label}}`).join(' + ');
+  BETS['manual|' + Date.now()] = {{ week: String(Math.max(...legs.map(l => l.week))), desc, odds, stake: stake || undefined, legs, parlay: true }};
+  saveBets();
+  openMyBetsModal();
+  updateMyBetsButton();
+}}
+// Each leg's actual stat and W/L hint; the parlay looks L as soon as one
+// leg missed, W once every leg hit.
+function parlayLegResults(b) {{
+  return (b.legs || []).map(l => {{
+    const actual = betActual({{ manual: false, key: l.key, b: {{ meta: l }} }});
+    return {{ l, actual, res: suggestedResult({{ b: {{ side: l.side, line: l.line }} }}, actual) }};
+  }});
+}}
+function parlaySuggestion(b) {{
+  const rs = parlayLegResults(b);
+  if (!rs.length) return null;
+  if (rs.some(x => x.res === 'loss')) return 'loss';
+  return rs.every(x => x.res === 'win') ? 'win' : null;
+}}
+function parlayLegsHtml(b) {{
+  return '<div style="font-size:11px; margin-top:3px;">' + parlayLegResults(b).map(({{ l, actual, res }}) =>
+    `<div>${{res === 'win' ? '&#9989;' : (res === 'loss' ? '&#10060;' : (res === 'push' ? '&#8596;&#65039;' : '&middot;'))}} ${{escapeHtml(l.player)}} ${{l.side === 'over' ? 'O' : 'U'}} ${{escapeHtml(String(l.line))}} ${{escapeHtml(l.stat_label)}}${{actual === null || actual === undefined ? '' : ' <span class="muted">(' + (Math.round(actual * 10) / 10) + ')</span>'}}</div>`
+  ).join('') + '</div>';
+}}
+
 // Default view: biggest 🔥/🧊/❓ signal first (see signal_rank in
 // enrichRow), not alphabetical by player -- Trevor asked for the whole
 // table to open this way, not just as a click-to-sort option. sortDir
@@ -4027,6 +4123,7 @@ document.getElementById('tbody').addEventListener('change', (e) => {{
   if (sel.value) MARKS[key] = sel.value; else delete MARKS[key];
   saveMarks();
   if (sel.value === 'bet') {{ ensureBetMeta(key); snapshotMarket(key); saveBets(); }}
+  if (sel.value === 'parlay') {{ ensureBetMeta(key); saveBets(); }}
   render();
 }});
 
@@ -4118,7 +4215,7 @@ document.getElementById('modalBody').addEventListener('change', (e) => {{
   const key = sel.dataset.markKey;
   if (sel.value) MARKS[key] = sel.value; else delete MARKS[key];
   saveMarks();
-  if (sel.value === 'bet') {{ ensureBetMeta(key); saveBets(); }}
+  if (sel.value === 'bet' || sel.value === 'parlay') {{ ensureBetMeta(key); saveBets(); }}
   render(); // updates the main table underneath so it's current whenever the modal closes
   if (currentModalPlayer) {{
     // redraw the popup so a newly-✅'d stat shows its bet slip right away
@@ -4265,6 +4362,10 @@ document.getElementById('modalBody').addEventListener('click', (e) => {{
     openMyBetsModal();
     return;
   }}
+  if (t.id === 'parlayAdd') {{
+    addParlayFromBuilder();
+    return;
+  }}
   if (t.id === 'betsAddManual') {{
     const key = 'manual|' + Date.now();
     BETS[key] = {{ week: betsWeekFilter === 'ALL' ? String(WEEK) : betsWeekFilter.split('|')[1] }};
@@ -4277,7 +4378,7 @@ document.getElementById('modalBody').addEventListener('click', (e) => {{
   if (t.id === 'betsFillSuggested') {{
     for (const x of allBets()) {{
       if (x.b.result) continue;
-      const sug = suggestedResult(x, betActual(x));
+      const sug = x.b.legs ? parlaySuggestion(x.b) : suggestedResult(x, betActual(x));
       if (sug) {{ BETS[x.key] = Object.assign(BETS[x.key] || {{}}, {{ result: sug }}); }}
     }}
     saveBets();

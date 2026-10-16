@@ -3250,3 +3250,13 @@ Trevor: "jeremiyah love is out this week and tyler allgeier is a must bet under"
 
 Trevor: "whenever i reload the page, hide x rows is checked but the x still show up". The browser restored the checkbox tick on reload while `hideMarkedX` (and the other filter variables) started false. Now Hide ❌, Hide ❓, Ladder only, Weak matchup only and Strong matchup only are saved in localStorage (`nfl_prop_dashboard_filters_v1`) and synced from the box before the first render. Tested headlessly: tick → reload keeps rows hidden; untick → reload shows them.
 - Then, per Trevor ("i want it to load with hide rows checked"): Hide ❌ rows now starts ticked on every page load (`checked` attribute, `hideMarkedX = true`, and `restoreFilterBoxes` forces it on instead of using the saved value). Unticking still works until the next reload. The other filter boxes keep their remembered state.
+
+## 🔗 Parlay mark + parlay builder in My Bets (2026-10-16)
+
+Trevor: "make a new status for parlay ... don't add it to my bets ... unless you have a way where i can like select which parlays i combined in the my bets screen and what odds i got. actually do that".
+
+- **Mark:** new 🔗 Parlay option (`MARKS[key] = 'parlay'`, synced like other marks). It fills `BETS[key].meta` so the leg can be described later, but isn't a single bet (`allBets()` only lists 'bet' marks plus manual bets).
+- **Builder:** My Bets has a "🔗 Build a parlay" box (`parlayBuilderHtml`) listing every 🔗 row: checkbox, side (defaults to the row's lean), line (defaults to the best line for that side), and "in N parlays". Add requires 2+ legs and valid odds; stake is optional. It saves `BETS['manual|ts'] = { week, desc: 'Parlay: A O 40.5 Rush Yds + ...', odds, stake, legs:[{key, player, team, opp, week, season, stat_col, stat_label, side, line}], parlay: true }`.
+- **Display/results:** the parlay row lists each leg with ✅/❌ and the actual stat when known (`parlayLegResults` via `betActual` + `suggestedResult`). `parlaySuggestion` gives "looks L" on any losing leg and "looks W" when every leg won. Fill suggested results uses it.
+- The "Add a bet by hand" button now says "(ladder, anything)".
+- **Tested headlessly:** the dropdown has 🔗; parlay rows are excluded from singles; error messages for no legs / no odds; parlay saved with 2 week-5 legs (Swift O 40.5 had 43 ✅, Allgeier U 5.5 had 7 ❌) → looks L → Fill suggested = Loss, -$10.
