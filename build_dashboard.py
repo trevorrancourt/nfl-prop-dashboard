@@ -3055,29 +3055,34 @@ function matchupMismatch(r, cons, weeks) {{
   const r1 = v => Math.round(v * 10) / 10;
   const what = `${{r.position}} ${{r.stat_label}}`;
   const tag = t => `${{t}} #${{ranks[t] || '-'}}`;
-  // "vs top-half: held X, but Y got Z. vs weaker: held ..." -- each game in its own group.
-  const list = gs => gs.map(g => `${{tag(g.vs)}} ${{r1(g.val)}}`).join(', ');
-  const split = (top, bottom, topWord, bottomWord) => {{
-    const parts = [];
-    const tHeld = top.filter(g => g.hit === (cons.side === 'under')), tGot = top.filter(g => g.hit !== (cons.side === 'under'));
-    const bHeld = bottom.filter(g => g.hit === (cons.side === 'under')), bGot = bottom.filter(g => g.hit !== (cons.side === 'under'));
-    const say = (word, held, got) => `vs ${{word}} offenses ` + [held.length ? `held ${{list(held)}}` : '', got.length ? `allowed ${{list(got)}}` : ''].filter(Boolean).join(', ');
-    if (top.length) parts.push(say(topWord, tHeld, tGot));
-    if (bottom.length) parts.push(say(bottomWord, bHeld, bGot));
-    return `${{r.opponent}} ` + parts.join('; ') + ' (scaled to his share).';
+  // Judged on the team's raw numbers vs what that offense USUALLY gets in
+  // its other games -- not scaled to his share and not vs the line (fixed
+  // 2026-10-16: Swift Rush Att showed BAL's 28 attempts as 14 "Swift-sized"
+  // ones, under the line, so ATL got credit for holding BAL -- but BAL
+  // usually gets 24; ATL didn't stop them at all). A defense "held" an
+  // offense if it allowed at most its usual; it "gave it up" if at least.
+  const sh = cons.share || 0;
+  const raw = g => sh ? g.val / sh : g.val;
+  const usualRaw = g => (g.usual === null || !sh) ? null : g.usual / sh;
+  const heldIt = g => usualRaw(g) === null ? g.hit === (cons.side === 'under') : raw(g) <= usualRaw(g);
+  const desc = g => `${{tag(g.vs)}} ${{r1(raw(g))}}` + (usualRaw(g) === null ? '' : ` (usually ${{r1(usualRaw(g))}})`);
+  const say = (word, gs) => {{
+    const held = gs.filter(heldIt), let_ = gs.filter(g => !heldIt(g));
+    return `vs ${{word}} offenses ` + [held.length ? `held ${{held.map(desc).join(', ')}}` : '', let_.length ? `allowed ${{let_.map(desc).join(', ')}}` : ''].filter(Boolean).join('; ');
   }};
+  const split = (topWord, bottomWord) => `${{r.opponent}} ` + [top.length ? say(topWord, top) : '', bottom.length ? say(bottomWord, bottom) : ''].filter(Boolean).join(' | ') + ` (team ${{r.stat_label}}).`;
   const top = cons.dg.filter(g => ranks[g.vs] && ranks[g.vs] <= half);
   const bottom = cons.dg.filter(g => !(ranks[g.vs] && ranks[g.vs] <= half));
   if (cons.side === 'under' && me <= MISMATCH_OFF_TOP) {{
-    if (top.length && top.every(g => g.hit)) return null;
+    if (top.length && top.every(heldIt)) return null;
     return `Matchup: ${{r.team}} is the #${{me}} ${{what}} offense. ` + (top.length
-      ? split(top, bottom, 'top-half', 'weaker')
+      ? split('top-half', 'weaker')
       : `${{r.opponent}} hasn't faced a top-half ${{what}} offense in these weeks (${{cons.dg.map(g => tag(g.vs)).join(', ')}}), so its record doesn't say much about this one.`);
   }}
   if (cons.side === 'over' && me > n - MISMATCH_OFF_TOP) {{
-    if (bottom.length && bottom.every(g => g.hit)) return null;
+    if (bottom.length && bottom.every(g => !heldIt(g) || raw(g) === usualRaw(g))) return null;
     return `Matchup: ${{r.team}} is only the #${{me}} ${{what}} offense. ` + (bottom.length
-      ? split(top, bottom, 'stronger', 'bottom-half')
+      ? split('stronger', 'bottom-half')
       : `${{r.opponent}} hasn't faced a bottom-half ${{what}} offense in these weeks (${{cons.dg.map(g => tag(g.vs)).join(', ')}}), so its record doesn't say much about this one.`);
   }}
   return null;

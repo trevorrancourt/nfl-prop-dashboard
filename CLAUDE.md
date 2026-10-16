@@ -72,8 +72,8 @@ It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of
   - A defense's miss doesn't count against an offense whose usual output is under 0.75× the line.
   - The adjusted rate applies only if enough games remain.
 - **Matchup mismatch → ❓, not a pick** (2026-10-16, per Trevor: "atlanta allows a lot of yards to good run offenses and holds bad ones in check. don't tell me to go under when chicago is a huge run offense"). `matchupMismatch()` uses `rankOffenses()` (same ranks as the defense popup, 1 = produces the most).
-  - **Under:** if this week's offense is top-10 (`MISMATCH_OFF_TOP`), the defense must have held every top-half offense it faced, or it's ❓.
-  - **Over:** the mirror, for a bottom-10 offense: the defense must have given it up to every bottom-half offense it faced.
+  - **Under:** if this week's offense is top-10 (`MISMATCH_OFF_TOP`), the defense must have held every top-half offense it faced **at or below that offense's usual output** (raw team numbers, not scaled to the player's share, not vs the line), or it's ❓.
+  - **Over:** the mirror, for a bottom-10 offense: the defense must have let every bottom-half offense reach at least its usual.
   - **Untested** (the defense never faced that kind of offense) → ❓.
   - The reason in the ❓ hover lists the games split by top half / weaker.
   - Kept as ❓ rather than tossing games. Tossing "cheap hits" was tested and dropped MUST BETs from 40 to 1 (see HISTORY).

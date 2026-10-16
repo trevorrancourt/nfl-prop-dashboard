@@ -3211,3 +3211,12 @@ Trevor, after the cheap-hits numbers: "do you think using actual yards vs just t
 - The ❓ hover reads, e.g.: "Matchup: CHI is the #4 RB Rush Yds offense. ATL vs top-half offenses held CAR #14 31.9, allowed BAL #5 84.5; vs weaker offenses held NO #29 24.2, GB #31 8.2 (scaled to his share). Would have been under 60.5 (he's 3/4, ATL 3/4), so it's a ❓ instead of a pick."
 - First draft redeclared `_offRankCache` (already used by `rankOffenses`), which would have blanked the page. The headless check caught it, and the draft was switched to reuse `rankOffenses`.
 - **Effect:** Wk 2-5, lines at each player's median (all Unders): 56 of 475 picks → ❓. Tiers [none,1,2,3,MUST] went [1197,125,209,101,40] → [1253,101,186,92,40]; MUST BETs unaffected, since they already need the defense perfect. Lines at each player's 25th percentile (Overs): 27 of 597 → ❓.
+
+### Fix: judge "held" vs the offense's usual, not the scaled line (2026-10-16)
+
+Trevor on Swift Rush Attempts: "chi is #2. baltimore was #5 and did 28 against atl ... why would this still be an under". The check had used the share-scaled values vs the line: BAL's 28 attempts × Swift's 50% share = 14.1, under the line, so ATL "held" BAL. But BAL usually gets 24.3, so ATL didn't stop them.
+
+Now `matchupMismatch()` compares the raw team value with that offense's usual from its other games (`g.val / share` vs `g.usual / share`). "Held" means ≤ usual; for Overs, "gave it up" means ≥ usual. If an offense has no other games, it falls back to the line result. The reason text shows raw numbers with "(usually X)", matching the defense popup.
+
+- Swift Rush Att at 16.5/17.5 → ❓ ("allowed BAL #5 28 (usually 24.3)"). Rush Yds → ❓ ("allowed BAL #5 175 (usually 90.7)").
+- Sim (Wk 2-5, lines at median): 127 picks → ❓ (was 56); tiers [none,1,2,3,MUST] [1324,84,142,83,39]. Lines at 25th pct: 118 → ❓.
