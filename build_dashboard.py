@@ -2110,8 +2110,18 @@ function parlayLegCandidates() {{
   out.sort((a, b) => (b.m.week - a.m.week) || String(a.m.kick || '9999').localeCompare(String(b.m.kick || '9999')) || a.m.player.localeCompare(b.m.player));
   return out;
 }}
+// Legs already in a parlay drop out of the builder (2026-10-16, per Trevor:
+// "once they're added to a parlay in there can you take them out of the
+// build queue?"); a "show" link brings them back to reuse one.
+let parlayShowUsed = false;
 function parlayBuilderHtml() {{
-  const legs = parlayLegCandidates();
+  const all = parlayLegCandidates();
+  const hidden = parlayShowUsed ? 0 : all.filter(l => l.used).length;
+  const legs = parlayShowUsed ? all : all.filter(l => !l.used);
+  const usedNote = hidden ? ` <span class="muted">${{hidden}} leg${{hidden > 1 ? 's' : ''}} already in a parlay hidden &middot; <a href="#" id="parlayShowUsed">show</a></span>` : '';
+  if (!legs.length && hidden) {{
+    return `<div class="modal-note">&#128279; <strong>Build a parlay:</strong> every &#128279; leg is already in a parlay.${{usedNote}}</div>`;
+  }}
   if (!legs.length) {{
     return '<div class="modal-note">&#128279; <strong>Build a parlay:</strong> mark rows &#128279; Parlay in the table and they show up here to combine. (Parlay rows aren&#39;t counted as single bets.)</div>';
   }}
@@ -2124,7 +2134,7 @@ function parlayBuilderHtml() {{
       <td class="muted">${{l.used ? 'in ' + l.used + ' parlay' + (l.used > 1 ? 's' : '') : ''}}</td>
     </tr>`).join('');
   return `<div style="border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:10px;">
-    <div style="margin-bottom:6px;"><strong>&#128279; Build a parlay</strong> <span class="muted">-- tick the legs you combined, then the odds you got.</span></div>
+    <div style="margin-bottom:6px;"><strong>&#128279; Build a parlay</strong> <span class="muted">-- tick the legs you combined, then the odds you got.</span>${{usedNote}}</div>
     <div class="modal-table-wrap"><table class="modal-table"><tbody>${{rows}}</tbody></table></div>
     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:6px;">
       <input id="parlayOdds" class="bet-odds" inputmode="numeric" placeholder="odds e.g. +450" style="width:110px;">
@@ -2152,6 +2162,7 @@ function addParlayFromBuilder() {{
   }});
   const desc = 'Parlay: ' + legs.map(l => `${{l.player}} ${{l.side === 'over' ? 'O' : 'U'}} ${{l.line}} ${{l.stat_label}}`).join(' + ');
   BETS['manual|' + Date.now()] = {{ week: String(Math.max(...legs.map(l => l.week))), desc, odds, stake: stake || undefined, legs, parlay: true }};
+  parlayShowUsed = false;
   saveBets();
   openMyBetsModal();
   updateMyBetsButton();
@@ -4359,6 +4370,12 @@ document.getElementById('modalBody').addEventListener('click', (e) => {{
   const wkLink = t.closest('.bets-week-link');
   if (wkLink) {{
     betsWeekFilter = wkLink.dataset.weekKey;
+    openMyBetsModal();
+    return;
+  }}
+  if (t.id === 'parlayShowUsed') {{
+    e.preventDefault();
+    parlayShowUsed = true;
     openMyBetsModal();
     return;
   }}
