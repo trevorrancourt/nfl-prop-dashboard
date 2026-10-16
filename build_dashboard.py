@@ -3291,7 +3291,12 @@ function hitCellHtml(r, which) {{
     for (const x of c.dg) lines.push(`${{x.hit ? '✔' : (x.excused ? '~' : '✘')}} Wk${{x.week}} vs ${{x.vs}}: ${{r1(x.val)}}` + (x.usual !== null ? ` (${{x.vs}} usually gets ${{r1(x.usual)}})` : '') + (x.excused ? (c.side === 'over' ? ' -- excused, that offense rarely does this' : ' -- excused, that offense always piles this up') : ''));
   }}
   if (ex) lines.push(`Adjusted ${{fmtHit(h, g - ex)}} after excusing ${{ex}} miss${{ex > 1 ? 'es' : ''}} (~). Hits are never removed.`);
-  return `<span class="${{cls}}" title="${{escapeHtml(lines.join('\\n'))}}">${{sideL}} ${{fmtHit(h, g)}}${{ex ? ` <span class="muted">(${{fmtHit(h, g - ex)}})</span>` : ''}}</span>`;
+  // Every game excused = nothing left to judge (2026-10-16: "O 0/4 (-)" on
+  // Bowers vs BUF read like BUF shuts TEs down; really no offense BUF faced
+  // gets near his number, so there was no fair test).
+  const noTest = ex && g - ex === 0;
+  if (noTest) lines.push(isP ? 'Every miss came against a matchup that explains it -- no fair test of him at this line.' : `None of the offenses ${{r.opponent}} faced usually get near this number at his share -- no fair test of this defense at this line.`);
+  return `<span class="${{cls}}" title="${{escapeHtml(lines.join('\\n'))}}">${{sideL}} ${{fmtHit(h, g)}}${{ex ? ` <span class="muted">(${{noTest ? 'no fair test' : fmtHit(h, g - ex)}})</span>` : ''}}</span>`;
 }}
 
 function enrichRow(r, weeks, defCache) {{

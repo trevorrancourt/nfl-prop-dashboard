@@ -3283,3 +3283,7 @@ Trevor: "put high end question marks and question marks with positive game scrip
 - In `enrichRow`, after the tiebreak: a ❓ row (`needsReview`) with no role change and no matchup mismatch (`mismatchFlag`) gets `idea_reason` if it was demoted from 2 (`demotedFrom === 2`, "high end: would have been a 2-star"), or if `tb.script.effect > 0` ("game script supports the Over/Under (…)"). Both reasons can apply.
 - Shown as 💡 (hover: why + the ❓ reason + second look). `signal_rank` 5, so it sorts after 3-star (6) and before ❓ (3). "Hide ❓ rows" keeps 💡. Not alerted.
 - Sim (Wk 2-5, lines at median): ⭐39 / 3-star 73 / 💡163 (138 high-end, 43 script) / ❓272.
+
+## "no fair test" instead of "(-)" (2026-10-16)
+
+Trevor on Brock Bowers Rec Yds vs BUF ("why does this say over 0/4 when it has?"): BUF allowed 110/74/0/52 to all TEs, but Opp Hit scales each game to Bowers' 66.5% share (73/49/0/35), so none clear ~75.5. All four were also excused, because those offenses' usual TE output (scaled) is under 0.75× the line. The cell showed "O 0/4 (-)". When every game is excused, the cell now reads "O 0/4 (no fair test)" and the hover explains that none of the offenses BUF faced usually get near this number at his share. The math is unchanged.
