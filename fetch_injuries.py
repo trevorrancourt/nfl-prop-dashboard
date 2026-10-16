@@ -200,6 +200,22 @@ def norm_name(n):
     return " ".join(n.split())
 
 
+# ESPN's status field can lag its own news note ("X has been ruled out" while
+# still listed Questionable), so the note is read too.
+NEWS_OUT = ("ruled out", "won't play", "will not play", "will miss", "is out for", "out for sunday",
+            "out for monday", "out for thursday", "out for saturday", "not expected to play", "has been placed on")
+NEWS_DOUBTFUL = ("doubtful",)
+
+
+def status_from_news(note):
+    n = (note or "").lower()
+    if any(k in n for k in NEWS_OUT):
+        return "Out"
+    if any(k in n for k in NEWS_DOUBTFUL):
+        return "Doubtful"
+    return None
+
+
 def fetch_espn_injuries():
     """[{espn_id, name, team (abbr), position, status, injury, note, date}]
     from ESPN's public feed. Raises on network/format trouble."""
@@ -228,6 +244,10 @@ def fetch_espn_injuries():
             team = ((ath.get("team") or {}).get("abbreviation")) or FULL_TO_ABBR.get(team_full, "")
             team = {"WSH": "WAS", "LAR": "LA", "JAC": "JAX"}.get(team, team)
             details = item.get("details") or {}
+            note = " ".join(x for x in (item.get("shortComment"), item.get("longComment")) if x)
+            news = status_from_news(note)
+            if news and STATUS_SEVERITY[news] > STATUS_SEVERITY[status]:
+                status = news  # the news note is ahead of ESPN's status field
             out.append({
                 "espn_id": espn_id,
                 "name": ath.get("displayName") or "",
@@ -259,11 +279,15 @@ def gh_notice(title, lines):
     """One GitHub Actions annotation (readable on the run page, and by Claude
     through the API when the logs aren't), so the ESPN step can be checked
     from outside. Plain print anywhere else."""
-    msg = "; ".join(str(x) for x in lines)[:3500]
+    msg = "; ".join(str(x) for x in lines)[:30000]
     if os.environ.get("GITHUB_ACTIONS"):
         print(f"::notice title={title}::" + msg.replace("%", "%25").replace("\r", "").replace("\n", "%0A"))
     else:
         print(f"{title}: {msg}")
+
+
+def position_of(e, info):
+    return (e.get("position") or info.get("position") or "").strip()
 
 
 def merge_espn(players, by_team, snap_shares, crosswalk, week, espn_entries, log=None):
@@ -294,7 +318,8 @@ def merge_espn(players, by_team, snap_shares, crosswalk, week, espn_entries, log
             continue  # the official report already says this or worse
         if not cur and gsis not in played:
             continue  # out for a while already -- not a new absence
-        log.append(f"{e['name']} {e['team']}: {(cur or {}).get('status', 'none')} -> {e['status']}")
+        log.append(f"{e['name']} {e['team']}: {(cur or {}).get('status', 'none')} -> {e['status']}"
+                   + (f" [{(e['note'] or '')[:110]}]" if position_of(e, info) in ("QB", "RB", "WR", "TE") else ""))
         players[gsis] = {
             "status": e["status"], "source": "espn",
             "primary_injury": e["injury"] or (cur or {}).get("primary_injury"),
@@ -409,7 +434,7 @@ def main():
         espn_ok = True
         from collections import Counter
         counts = Counter(e["status"] for e in entries)
-        gh_notice("ESPN injuries", [f"read {len(entries)} ESPN entries {dict(counts)}", f"changed {espn_changed}"] + log[:40])
+        gh_notice("ESPN injuries", [f"read {len(entries)} ESPN entries {dict(counts)}", f"changed {espn_changed}"] + log[:150])
     except Exception as e:
         print(f"WARNING: ESPN injury feed unavailable ({e}); using the official report only.", file=sys.stderr)
         gh_notice("ESPN injuries FAILED", [repr(e)[:500]])
