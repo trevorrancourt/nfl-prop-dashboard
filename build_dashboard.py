@@ -27,8 +27,11 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 # be public: row-level security on the user_state table is what keeps each
 # person's data private. NEVER put the service_role key here. Left blank,
 # the page has no sign-in and works exactly as before (localStorage only).
-SUPABASE_URL = __import__("os").environ.get("SUPABASE_URL", "")
-SUPABASE_ANON_KEY = __import__("os").environ.get("SUPABASE_ANON_KEY", "")
+SUPABASE_URL = __import__("os").environ.get("SUPABASE_URL", "https://ugyxzhdcmzqhibajtbwa.supabase.co")
+SUPABASE_ANON_KEY = __import__("os").environ.get(
+    "SUPABASE_ANON_KEY",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVneXh6aGRjbXpxaGliYWp0YndhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxMjA0ODAsImV4cCI6MjEwNzY5NjQ4MH0.3isws7QG2gg_5OSCZETKP6gGa2hZ73xmCo3swPBdScw",
+)
 
 # (stat column in stats_cache, Odds API market key, display label) per
 # position. "total_tds" is the Anytime-TD-Scorer stat: rushing_tds +

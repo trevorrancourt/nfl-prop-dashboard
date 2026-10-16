@@ -60,7 +60,7 @@ The two boards link to each other.
 - Bets: `nfl_prop_dashboard_bets_v1` (key = `WEEK|player|team|stat_col`)
 - Columns: `nfl_prop_dashboard_cols_v1`
 - My Bets has Backup/Restore (JSON).
-- **Login so bets sync across devices: code built 2026-10-16, waiting on Trevor's Supabase project.** Hidden until `SUPABASE_URL` / `SUPABASE_ANON_KEY` (top of `build_dashboard.py`) are filled in. Look for "Sign-in + cross-device sync" in the template. The merge is three-way against the last synced copy (`nfl_prop_dashboard_sync_base_v1|<user id>`), and writes are conditional on `updated_at` so two devices can't overwrite each other. Not available on the Mac's file:// copy. The plan Trevor agreed to:
+- **Login so bets sync across devices: live 2026-10-16** (Supabase project `ugyxzhdcmzqhibajtbwa`; URL + anon key at the top of `build_dashboard.py`). Look for "Sign-in + cross-device sync" in the template. The merge is three-way against the last synced copy (`nfl_prop_dashboard_sync_base_v1|<user id>`), and writes are conditional on `updated_at` so two devices can't overwrite each other. Not available on the Mac's file:// copy. The plan Trevor agreed to:
   - **Supabase** (free) handles email magic-link sign-in, plus one table holding each user's marks and bets.
   - The site keeps working logged-out with localStorage. On first login, local marks/bets are merged into the account.
   - After that, every save also upserts to Supabase (debounced), and on load the account copy is merged in.
