@@ -53,7 +53,7 @@ def main():
         if not args.skip_odds:
             run("fetch_odds.py")
         if not args.skip_weather:
-            run("fetch_weather.py")
+            run_optional("fetch_weather.py")  # weather is nice-to-have; never block the board on it
         if not args.skip_coverage:
             run_optional("fetch_coverage.py")
 

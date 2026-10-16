@@ -49,7 +49,7 @@ def get_with_retries(url, params, attempts=4):
     last_error = None
     for attempt in range(1, attempts + 1):
         try:
-            return requests.get(url, params=params, timeout=20)
+            return requests.get(url, params=params, timeout=30)
         except requests.exceptions.RequestException as e:
             last_error = e
             wait = 1.5 * attempt
@@ -129,7 +129,13 @@ def main():
             continue
 
         print(f"  {label}: fetching forecast for {stadium}...")
-        forecast = fetch_forecast(info["lat"], info["lon"], g["gameday"], gametime)
+        # One slow/unreachable forecast shouldn't sink the whole refresh
+        # (added 2026-10-15 after Open-Meteo timed out on a GitHub run).
+        try:
+            forecast = fetch_forecast(info["lat"], info["lon"], g["gameday"], gametime)
+        except Exception as e:
+            print(f"    (couldn't reach the weather service for this game, skipping: {e})")
+            forecast = None
         time.sleep(0.3)
         if forecast is None:
             print("    (no forecast available yet for this game -- probably too far out)")
