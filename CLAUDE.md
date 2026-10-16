@@ -65,9 +65,9 @@ It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of
 - **Default signal mode is "Consistency (hit rates)".** "Average edge" is the old formula, still selectable.
   - The choice is saved in localStorage `nfl_prop_dashboard_signal_mode`.
   - If Trevor says signals "disappeared", check this first.
-- **Tiers:**
-  - 1 = player and defense both ≥75% but player not perfect.
-  - 2 = player perfect and defense ≥2/3.
+- **Three groups only (2026-10-16, per Trevor: "bet the must bets, review the three stars and then like have everything else"):** ⭐ MUST BET, 🔥🔥🔥/🧊🧊🧊, and ❓. Rows that compute to 1 or 2 are shown as ❓ with "Would have been 🔥🔥 …" (`demoteWhy` in enrichRow). The underlying tiers:
+  - 1 = player and defense both ≥75% but player not perfect (→ ❓).
+  - 2 = player perfect and defense ≥2/3 (→ ❓).
   - 3 = player perfect, defense ≥75%, and a top-10 matchup (otherwise capped at 2).
   - ⭐ MUST BET = both sides perfect, 4+ games each, top-10 matchup (Over: one of the 10 defenses allowing the most; Under: one of the 10 allowing the least).
   - Price gate: worse than -130 blocks a signal.
@@ -81,7 +81,7 @@ It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of
   - **Untested** (the defense never faced that kind of offense) → ❓.
   - The reason in the ❓ hover lists the games split by top half / weaker.
   - Kept as ❓ rather than tossing games. Tossing "cheap hits" was tested and dropped MUST BETs from 40 to 1 (see HISTORY).
-- **Role changes block MUST BET** (2026-10-16, per Trevor: "lines that are a result of injuries, trade, personnel issues"). Such a row is held at 3 with a ⚠️ tag; alerts send it as a 3-star with "⚠️ role change". Three sources:
+- **Role changes → ❓** (2026-10-16, per Trevor: "lines that are a result of injuries, trade, personnel issues", then "i don't even want that in 3 stars"). A MUST BET or 3-star with a role change becomes ❓ ("Role change -- would have been …"), so it's never alerted. Three sources:
   - **Trade:** the nflverse roster says a player's team changed (`fetch_stats.detect_trades`). It flags him plus same-group teammates on both teams (`TRADE_ROLE_GROUPS`) until 2 games after (`TRADE_SETTLE_GAMES`). The new-team side counts his own games, or ends after 4 team games if he never plays. Only players with a real role count (`trade_had_role`: WR/TE 3+ targets/g, RB 6+ touches/g, QB 100+ pass yds/g). A traded player's rows use his new team and opponent.
   - **Injury:** a strong own-team 🩹 entry, i.e. a QB/RB/WR/TE with a real role (50%+ snaps, or for RBs 25%+ of team RB carries, `RB_CARRY_SHARE_ROLE`) listed Out/Doubtful. Questionable/missed-practice teammates are a faded ⚠️ "heads-up" that never blocks.
   - **Manual:** "⚠️ Flag role change" in the player popup (`MARKS['role|WEEK|player|team'] = 'flux'`, synced). notify.py applies each person's own flags.

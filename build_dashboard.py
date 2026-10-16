@@ -3460,6 +3460,31 @@ function enrichRow(r, weeks, defCache) {{
     coldLevel = 0;
   }}
 
+  // Three groups only (2026-10-16, per Trevor: "must bet, three stars then
+  // just question marks ... i want to bet the must bets, review the three
+  // stars and then like have everything else"):
+  //   ⭐ MUST BET, 🔥🔥🔥/🧊🧊🧊, and ❓ for everything else worth a look.
+  // So 1-2 flame/ice rows become ❓ (with what they would have been), and
+  // a role change (trade / key teammate out / your flag -- roleChangeReasons)
+  // takes a MUST BET or 3-star down to ❓ too ("i don't even want that in 3
+  // stars"), instead of holding it at 3.
+  const roleChanges = roleChangeReasons(r);
+  const roleCapped = false;
+  let demoteWhy = null;
+  {{
+    const lvlNow = Math.max(hotLevel, coldLevel);
+    const sideNow = hotLevel > coldLevel ? 'over' : 'under';
+    const icon = sideNow === 'over' ? '🔥' : '🧊';
+    const was = lvlNow === 4 ? 'a MUST BET' : icon.repeat(lvlNow);
+    const consLine = (SIGNAL_MODE === 'consistency' && cons) ? ` He cleared ${{cons.side}} ${{cons.line}} in ${{fmtHit(cons.pHits, cons.pGames)}}; ${{r.opponent}} allowed it in ${{fmtHit(cons.dHits, cons.dGames)}}.` : '';
+    if (lvlNow >= 1 && roleChanges.length) {{
+      demoteWhy = `Role change -- would have been ${{was}} (${{sideNow}}): ${{roleChanges.join('; ')}}.` + consLine;
+    }} else if (lvlNow === 1 || lvlNow === 2) {{
+      demoteWhy = `Would have been ${{was}} (${{sideNow}}) -- below the 3-star bar.` + consLine + (tierCapReason ? ` Held under 3 by ${{tierCapReason}}.` : '');
+    }}
+    if (demoteWhy) {{ hotLevel = 0; coldLevel = 0; }}
+  }}
+
   const hot = hotLevel > 0;
   const cold = coldLevel > 0;
   // Numeric so the column is sortable: +1/+2/+3 hot, -1/-2/-3 cold, 0 neither.
@@ -3494,7 +3519,7 @@ function enrichRow(r, weeks, defCache) {{
   const edgeSign = derived.edge_pct === null ? 0 : signOf(derived.edge_pct);
   const ancSign = ancEdgePct === null ? 0 : signOf(ancEdgePct);
   const opposedSigns = edgeSign !== 0 && ancSign !== 0 && edgeSign !== ancSign;
-  const needsReview = SIGNAL_MODE === 'consistency' ? (consReview && !(preGateHot || preGateCold)) : ((edgeSig !== ancSig) && !(preGateHot || preGateCold) && !opposedSigns);
+  const needsReview = !!demoteWhy || (SIGNAL_MODE === 'consistency' ? (consReview && !(preGateHot || preGateCold)) : ((edgeSig !== ancSig) && !(preGateHot || preGateCold) && !opposedSigns));
   let reviewReason = null;
   if (needsReview) {{
     const fmtPct = (v) => (v >= 0 ? '+' : '') + Math.round(v * 100) + '%';
@@ -3520,13 +3545,6 @@ function enrichRow(r, weeks, defCache) {{
   // price, so it's still slightly more interesting than a row with
   // nothing going on. Ties within a tier (e.g. two different MUST BET
   // rows) keep whatever order they were in before sorting.
-  const roleChanges = roleChangeReasons(r);
-  let roleCapped = false;
-  if (roleChanges.length && (hotLevel === 4 || coldLevel === 4)) {{
-    if (hotLevel === 4) hotLevel = 3; else coldLevel = 3;
-    roleCapped = true;
-  }}
-
   let signalRank = 0;
   if (hotLevel === 4 || coldLevel === 4) signalRank = 7;
   else if (hotLevel === 3 || coldLevel === 3) signalRank = 6;
@@ -3560,7 +3578,7 @@ function enrichRow(r, weeks, defCache) {{
     hot: hot,
     cold: cold,
     needs_review: needsReview,
-    review_reason: (SIGNAL_MODE === 'consistency' && needsReview) ? consReviewReason : reviewReason,
+    review_reason: demoteWhy || ((SIGNAL_MODE === 'consistency' && needsReview) ? consReviewReason : reviewReason),
     hot_level: hotLevel,
     cold_level: coldLevel,
     signal: signal,
@@ -3602,7 +3620,7 @@ function render() {{
   document.getElementById('th-recent-avg').textContent = 'Avg (' + weeksLabel(selectedWeeks) + ')';
   // The How-picky slider only drives the Average-edge formula.
   if (SIGNAL_MODE === 'consistency') {{
-    document.getElementById('pickyLabel').textContent = 'Consistency: 1 = both 75%+  ·  2 = he cleared it every game, defense 2/3+  ·  3 = every game, defense 75%+, top-10 matchup  ·  ⭐ = every game on both sides (4+ games), top-10 matchup' + signalSampleNote();
+    document.getElementById('pickyLabel').textContent = '⭐ MUST BET = bet it: every game on both sides (4+ games), top-10 matchup  ·  🔥🔥🔥/🧊🧊🧊 = review: he cleared it every game, defense 75%+, top-10 matchup  ·  ❓ = everything else worth a look (weaker hit rates, role changes, matchup questions -- hover for why)' + signalSampleNote();
   }} else {{
     applyPickySetting();
   }}

@@ -3265,3 +3265,13 @@ Trevor: "make a new status for parlay ... don't add it to my bets ... unless you
 ## Minus sign in odds on mobile (2026-10-16)
 
 Trevor: "on mobile, i can't add a minus before the odds". The odds boxes (row bet slip, My Bets, parlay builder) used `inputmode="numeric"`, and the iPhone number pad has no minus key. They now use `inputmode="text"` (autocorrect/caps/spellcheck off), so the 123 keyboard has "-". `normOdds()` turns a leading unicode minus or en/em dash (iOS smart punctuation) into "-" before validating and saving. Tested on an emulated iPhone 13: "−115" → -115, "-120" → -120 (to win $10 on $12), parlay "–110" → -110.
+
+## Three groups: ⭐ / 3-star / ❓ (2026-10-16)
+
+Trevor (after the ⚠️ explanation): "i think i don't even want that in 3 stars. can we reorg the groupings. must bet, three stars then just question marks ... i want to bet the must bets, review the three stars and then like have everything else."
+
+- In `enrichRow`, right after the price gate: if the row's level is ≥1 and `roleChangeReasons(r)` is non-empty, or the level is 1–2, then the levels go to 0 and `demoteWhy` explains it. Examples: "Role change -- would have been a MUST BET (under): X is Out …" or "Would have been 🧊🧊 (under) -- below the 3-star bar … Held under 3 by matchup: …". `needs_review` is set and `review_reason = demoteWhy`.
+- The old "held at 3 with ⚠️" cap is gone (`role_capped` is always false). The faded heads-up ⚠️ still shows on ⭐/3-star rows.
+- The header legend now describes the three groups.
+- `notify.apply_own_flags` drops a person's manually flagged players from their alert entirely (it used to downgrade MUST BET → 3).
+- Sim (Wk 2-5, lines at median): [none,1,2,3,MUST] = [1561,0,0,73,38], 436 ❓. A simulated key-teammate-Out MUST BET → ❓ with the reason.

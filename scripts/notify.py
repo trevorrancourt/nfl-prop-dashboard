@@ -149,14 +149,14 @@ def pick_line(p):
 
 
 def apply_own_flags(picks, marks):
-    """This person's own ⚠️ role-change flags (set in the player popup) keep
-    that player out of MUST BET for them, same as on their board."""
+    """This person's own ⚠️ role-change flags (set in the player popup) take
+    that player off their alert entirely -- a role change makes a pick a ❓
+    on the board, not a MUST BET or 3-star (2026-10-16)."""
     out = []
     for p in picks:
         parts = (p.get("key") or "").split("|")
-        if p["tier"] == "MUST BET" and len(parts) >= 3 and (marks or {}).get("role|" + "|".join(parts[:3])) == "flux":
-            p = dict(p, tier="3 fire" if p["side"] == "over" else "3 ice",
-                     roleChange=(p.get("roleChange") or []) + ["you flagged a role change this week"])
+        if len(parts) >= 3 and (marks or {}).get("role|" + "|".join(parts[:3])) == "flux":
+            continue
         out.append(p)
     return out
 
