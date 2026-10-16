@@ -3034,6 +3034,55 @@ function offenseUsual(key, pos, weeks, off, exclDef, exclWeek) {{
   return g.length ? g.reduce((a, b) => a + b.val, 0) / g.length : null;
 }}
 
+// Matchup mismatch (added 2026-10-16, per Trevor: "atlanta allows a lot of
+// yards to good run offenses and holds bad ones in check. don't tell me to
+// go under when chicago is a huge run offense"). Offenses are ranked by
+// what their position group produces of this stat per game (1 = most).
+// Under: if this week's offense is top-MISMATCH_OFF_TOP, the defense must
+// have held the top-half offenses it faced too -- if a top-half offense got
+// over the line, or it hasn't faced one, it's not a pick (shown as ❓ with
+// the reason). Over: the mirror, for a bottom-MISMATCH_OFF_TOP offense vs a
+// defense that only gave it up to stronger offenses.
+const MISMATCH_OFF_TOP = 10;
+function matchupMismatch(r, cons, weeks) {{
+  if (!cons || !cons.dg || !cons.dg.length) return null;
+  // Same ranking the defense popup shows (rankOffenses, 1 = produces the most).
+  const {{ ranks }} = rankOffenses(r.position + '|' + r.stat_col, r.position, weeks);
+  const n = Object.keys(ranks).length;
+  const me = ranks[r.team];
+  if (!me || n < 2 * MISMATCH_OFF_TOP) return null;
+  const half = n / 2;
+  const r1 = v => Math.round(v * 10) / 10;
+  const what = `${{r.position}} ${{r.stat_label}}`;
+  const tag = t => `${{t}} #${{ranks[t] || '-'}}`;
+  // "vs top-half: held X, but Y got Z. vs weaker: held ..." -- each game in its own group.
+  const list = gs => gs.map(g => `${{tag(g.vs)}} ${{r1(g.val)}}`).join(', ');
+  const split = (top, bottom, topWord, bottomWord) => {{
+    const parts = [];
+    const tHeld = top.filter(g => g.hit === (cons.side === 'under')), tGot = top.filter(g => g.hit !== (cons.side === 'under'));
+    const bHeld = bottom.filter(g => g.hit === (cons.side === 'under')), bGot = bottom.filter(g => g.hit !== (cons.side === 'under'));
+    const say = (word, held, got) => `vs ${{word}} offenses ` + [held.length ? `held ${{list(held)}}` : '', got.length ? `allowed ${{list(got)}}` : ''].filter(Boolean).join(', ');
+    if (top.length) parts.push(say(topWord, tHeld, tGot));
+    if (bottom.length) parts.push(say(bottomWord, bHeld, bGot));
+    return `${{r.opponent}} ` + parts.join('; ') + ' (scaled to his share).';
+  }};
+  const top = cons.dg.filter(g => ranks[g.vs] && ranks[g.vs] <= half);
+  const bottom = cons.dg.filter(g => !(ranks[g.vs] && ranks[g.vs] <= half));
+  if (cons.side === 'under' && me <= MISMATCH_OFF_TOP) {{
+    if (top.length && top.every(g => g.hit)) return null;
+    return `Matchup: ${{r.team}} is the #${{me}} ${{what}} offense. ` + (top.length
+      ? split(top, bottom, 'top-half', 'weaker')
+      : `${{r.opponent}} hasn't faced a top-half ${{what}} offense in these weeks (${{cons.dg.map(g => tag(g.vs)).join(', ')}}), so its record doesn't say much about this one.`);
+  }}
+  if (cons.side === 'over' && me > n - MISMATCH_OFF_TOP) {{
+    if (bottom.length && bottom.every(g => g.hit)) return null;
+    return `Matchup: ${{r.team}} is only the #${{me}} ${{what}} offense. ` + (bottom.length
+      ? split(top, bottom, 'stronger', 'bottom-half')
+      : `${{r.opponent}} hasn't faced a bottom-half ${{what}} offense in these weeks (${{cons.dg.map(g => tag(g.vs)).join(', ')}}), so its record doesn't say much about this one.`);
+  }}
+  return null;
+}}
+
 function consistencyStats(r, weeks, sharePct, ranks) {{
   const key = r.position + '|' + r.stat_col;
   const idx = playerSelectedIndices(r, weeks);
@@ -3170,10 +3219,16 @@ function enrichRow(r, weeks, defCache) {{
         lvl = 2;
       }}
     }}
+    const mismatch = lvl > 0 ? matchupMismatch(r, cons, weeks) : null;
+    if (mismatch) lvl = 0;
     if (cons.side === 'over') hotLevel = lvl; else coldLevel = lvl;
     if (lvl === 0 && perfect) {{
       consReview = true;
       consReviewReason = `He cleared the ${{cons.side}} ${{cons.line}} every game (${{fmtHit(cons.pHits, cons.pGames)}}), but ${{r.opponent}} only allowed it in ${{fmtHit(cons.dHits, cons.dGames)}} of its games.`;
+    }}
+    if (mismatch) {{
+      consReview = true;
+      consReviewReason = mismatch + ` Would have been ${{cons.side}} ${{cons.line}} (he's ${{fmtHit(cons.pHits, cons.pGames)}}, ${{r.opponent}} ${{fmtHit(cons.dHits, cons.dGames)}}), so it's a ❓ instead of a pick.`;
     }}
   }}
   if (SIGNAL_MODE !== 'consistency' && derived.edge_pct !== null && ancEdgePct !== null) {{

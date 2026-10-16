@@ -71,6 +71,12 @@ It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of
   - A player's miss doesn't count against a top-10 tough defense (top-10 soft for an Under; `EXCUSE_TOUGH_TOP`, raised from 5 on 2026-10-16 per Trevor).
   - A defense's miss doesn't count against an offense whose usual output is under 0.75× the line.
   - The adjusted rate applies only if enough games remain.
+- **Matchup mismatch → ❓, not a pick** (2026-10-16, per Trevor: "atlanta allows a lot of yards to good run offenses and holds bad ones in check. don't tell me to go under when chicago is a huge run offense"). `matchupMismatch()` uses `rankOffenses()` (same ranks as the defense popup, 1 = produces the most).
+  - **Under:** if this week's offense is top-10 (`MISMATCH_OFF_TOP`), the defense must have held every top-half offense it faced, or it's ❓.
+  - **Over:** the mirror, for a bottom-10 offense: the defense must have given it up to every bottom-half offense it faced.
+  - **Untested** (the defense never faced that kind of offense) → ❓.
+  - The reason in the ❓ hover lists the games split by top half / weaker.
+  - Kept as ❓ rather than tossing games. Tossing "cheap hits" was tested and dropped MUST BETs from 40 to 1 (see HISTORY).
 - **Role changes block MUST BET** (2026-10-16, per Trevor: "lines that are a result of injuries, trade, personnel issues"). Such a row is held at 3 with a ⚠️ tag; alerts send it as a 3-star with "⚠️ role change". Three sources:
   - **Trade:** the nflverse roster says a player's team changed (`fetch_stats.detect_trades`). It flags him plus same-group teammates on both teams (`TRADE_ROLE_GROUPS`) until 2 games after (`TRADE_SETTLE_GAMES`). The new-team side counts his own games, or ends after 4 team games if he never plays. Only players with a real role count (`trade_had_role`: WR/TE 3+ targets/g, RB 6+ touches/g, QB 100+ pass yds/g). A traded player's rows use his new team and opponent.
   - **Injury:** a strong own-team 🩹 entry, i.e. a QB/RB/WR/TE with a real role (50%+ snaps, or for RBs 25%+ of team RB carries, `RB_CARRY_SHARE_ROLE`) listed Out/Doubtful. Questionable/missed-practice teammates are a faded ⚠️ "heads-up" that never blocks.

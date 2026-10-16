@@ -3200,3 +3200,14 @@ Trevor on D'Andre Swift Rush Yds Under (🧊🧊🧊 at ~60.5 vs ATL): (A) "kyle
   - Board-wide, with every line at the player's median (Wk 2-5), tiers [none,1,2,3,MUST] went from [1197,125,209,101,40] to [1576,25,51,19,1]. At 0.6: [1493,52,88,38,1]. At 0.5: [1450,69,104,48,1].
   - MUST BET collapses because it needs 4 real defense tests inside a 4-week window. With MUST BET needing 3 real tests instead: 0.6 gives [..,35,4], 0.5 gives [..,44,5].
   - Held for Trevor's decision on how strict to be.
+
+## Matchup mismatch: picks become ❓ (2026-10-16)
+
+Trevor, after the cheap-hits numbers: "do you think using actual yards vs just their ranking is the best move?", then "atlanta allows a lot of yards to good run offenses and holds bad ones in check. don't tell me to go under when chicago is a huge run offense". He agreed to sort offenses by rank and compare against this week's opponent, as a ❓ rather than removing games.
+
+- `matchupMismatch(r, cons, weeks)` runs in Consistency mode after the tier is set (only when lvl > 0). It uses `rankOffenses()`, the existing defense-popup ranking: each offense's per-game production of this pos+stat in the selected weeks, 1 = most.
+  - **Under:** when `r.team` is top-`MISMATCH_OFF_TOP` (10), every top-half offense the defense faced must have been held under the line. If any got over, or there were none, then lvl = 0 and it becomes ❓ with the reason.
+  - **Over:** mirrored for a bottom-10 offense vs the defense's bottom-half opponents.
+- The ❓ hover reads, e.g.: "Matchup: CHI is the #4 RB Rush Yds offense. ATL vs top-half offenses held CAR #14 31.9, allowed BAL #5 84.5; vs weaker offenses held NO #29 24.2, GB #31 8.2 (scaled to his share). Would have been under 60.5 (he's 3/4, ATL 3/4), so it's a ❓ instead of a pick."
+- First draft redeclared `_offRankCache` (already used by `rankOffenses`), which would have blanked the page. The headless check caught it, and the draft was switched to reuse `rankOffenses`.
+- **Effect:** Wk 2-5, lines at each player's median (all Unders): 56 of 475 picks → ❓. Tiers [none,1,2,3,MUST] went [1197,125,209,101,40] → [1253,101,186,92,40]; MUST BETs unaffected, since they already need the defense perfect. Lines at each player's 25th percentile (Overs): 27 of 597 → ❓.
