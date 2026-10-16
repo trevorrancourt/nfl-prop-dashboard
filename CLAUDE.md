@@ -11,7 +11,11 @@ Read this first in every session. The full build history (every version, decisio
 ## How it works
 `run.py` runs these in order, then builds the page:
 1. `fetch_stats.py`: nflverse schedule, weekly stats, snap counts and finished-game results → `data/stats_cache.json`. It picks the current week and backfills zero-stat weeks.
-2. `fetch_injuries.py`: nflverse injury report, with a practice-report fallback and snap shares.
+2. `fetch_injuries.py`: nflverse injury report, with a practice-report fallback and snap shares, plus ESPN's public injury feed merged on top (2026-10-16, for speed).
+   - The more severe status wins (IR/PUP/suspension → Out). Joined via players.csv `espn_id`, else name + team.
+   - ESPN-only entries for players who didn't play in the last 2 weeks are skipped (old absences).
+   - If ESPN is unreachable, the build continues with the NFL report alone. The board header says which ("Injuries: ESPN news + NFL report, updated …").
+   - The cloud session can't reach ESPN; only GitHub Actions can.
 3. `fetch_odds.py`: The Odds API player props from DK/FD/BetMGM.
    - The key comes from the `ODDS_API_KEY` env/secret; on the Mac it falls back to `config/odds_api_key.txt`.
    - About 9 credits per game, about 127 per full run, on a 20k/month plan.

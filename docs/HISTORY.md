@@ -3227,3 +3227,21 @@ Trevor: "on their game by game section, show their current week opponent and ave
 - **Top row** (`upcoming-row`, same style as the defense popup): "This week @OPP (they allow to all RBs)". For each stat it shows the opponent's per-game allowed to the position (`def_avg_allowed`), its rank chip (`oppRankChip`, 1 = toughest), and the current best line.
 - **"His avg (N games)" row** above "Avg opp rank faced", averaged over the played games shown (DNP weeks excluded).
 - Same day, per Trevor ("add target share and projected yards to that"): each "This week" cell now also shows "X% share · proj Y", from the row's Team Share (`r.share`: his cut of his team's production at his position for that stat) and Anticipated (`r.anticipated` = share × what they allow). Shares are within his position group (e.g. Swift's 57.7% Targets share is of CHI's RB targets, not all team targets).
+
+## Faster injuries: ESPN feed (2026-10-16)
+
+Trevor: "jeremiyah love is out this week and tyler allgeier is a must bet under", then (offered four fixes) "i think we just need faster injury updates".
+
+- **Why it was missed:** nflverse's Week 6 report only had Love as "Did Not Participate In Practice" with no game designation (those come with the Friday report, and nflverse posts later), so he was "Missed practice", severity 1, a non-blocking heads-up. He's ARI's lead back (64% of RB carries), and every Allgeier game in the sample is as the backup.
+- **Fix:** `fetch_injuries.py` now merges ESPN's public injury feed (`site.api.espn.com/apis/site/v2/sports/football/nfl/injuries`) after the nflverse report.
+  - Matching: ESPN athlete id (from `athlete.id` or the `/id/N/` link) via players.csv `espn_id`, else normalized name + team (`FULL_TO_ABBR` on the team block name).
+  - Status: ESPN_STATUS maps Injured Reserve/PUP/suspension → Out, Day-To-Day → Questionable. The more severe of nflverse/ESPN wins; ESPN entries get `source: "espn"` and its `shortComment` as `note`.
+  - Guard: ESPN-only entries for players with no game in the last two played weeks are skipped, so long-term IR doesn't flag teammates forever.
+  - The cache records `espn` (bool) and `generated_at_utc`. The board header shows "Injuries: ESPN news + NFL report (or NFL report only), updated <local time>". The ⛑️ and 🩹 hovers say "ESPN injury news: <note>" / "[ESPN]".
+- **Not testable live from the cloud session** (ESPN host blocked there; GitHub Actions can reach it). Tested:
+  - The blocked path: the build continues and the header says "NFL report only".
+  - A fixture shaped like ESPN's response:
+    - Love matched by link id → Out with note.
+    - Monangai matched by name → Questionable.
+    - A long-gone IR player skipped.
+  - With that, Allgeier Rush Yds Under went MUST BET → 🧊🧊🧊 with ⚠️ "Jeremiyah Love (RB) is Out". Direction-aware ❓ (no Under at all when the lead back is out) was offered but not requested.

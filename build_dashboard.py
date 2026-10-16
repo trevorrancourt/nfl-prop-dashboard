@@ -170,7 +170,22 @@ def load_caches():
     injuries_raw = json.loads(injuries_path.read_text()) if injuries_path.exists() else {}
     injuries = injuries_raw.get("players", {})
     injuries_by_team = injuries_raw.get("by_team", {})
+    global INJURY_META
+    INJURY_META = {"espn": injuries_raw.get("espn"), "at": injuries_raw.get("generated_at_utc")}
     return stats, odds, weather, coverage, injuries, injuries_by_team
+
+
+INJURY_META = {}
+
+
+def injuries_meta_html():
+    """Header note: where injury statuses came from and when (added
+    2026-10-16 with the ESPN feed, so it's visible whether ESPN worked)."""
+    if not INJURY_META.get("at"):
+        return ""
+    src = "ESPN news + NFL report" if INJURY_META.get("espn") else "NFL report only (ESPN feed unavailable)"
+    return (f' &middot; Injuries: {src}, updated <span class="local-time" data-utc="{INJURY_META["at"]}">'
+            f'{INJURY_META["at"][:16].replace("T", " ")} UTC</span>')
 
 
 # --- "Impactful injury" badges (added 2026-09-25) ---
@@ -377,6 +392,7 @@ def compute_injury_impacts(pos, stat_col, player_id, team, opponent, injuries_by
                 "injury": e.get("injury"),
                 "snap_pct": e["snap_pct"],
                 "carry_share": round((carry_shares or {}).get(e["gsis_id"], 0), 2) if INJURY_POSITION_GROUP.get(e["position"]) == "RB" else None,
+                "source": e.get("source"),
                 "reason": reason,
             }
             (helps if effect > 0 else hurts).append(item)
@@ -860,7 +876,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <div class="wrap">
   <header>
     <h1>NFL Player Prop Dashboard</h1>
-    <div class="meta">Season {season}, Week {week} &middot; Stats generated {stats_time} &middot; Odds generated {odds_time}</div>
+    <div class="meta">Season {season}, Week {week} &middot; Stats generated {stats_time} &middot; Odds generated {odds_time}{injuries_meta}</div>
     {board_switch_html}
   </header>
   {no_odds_note}
@@ -2435,7 +2451,7 @@ function injuryTag(r) {{
   if (inj.practice_status && inj.source !== 'practice') parts.push(`-- ${{inj.practice_status}}`);
   const src = inj.source === 'practice'
     ? 'NFL practice report -- no official game designation yet, final report usually comes out Friday'
-    : 'NFL official injury report';
+    : (inj.source === 'espn' ? 'ESPN injury news' + (inj.note ? ': ' + inj.note : '') : 'NFL official injury report');
   const title = `${{r.player}}: ${{parts.join(' ')}} (${{src}})`;
   return ` <span class="cov-tag ${{cls}} injury-tag" title="${{escapeHtml(title)}}">&#9937;&#65039;</span>`;
 }}
@@ -2456,7 +2472,7 @@ function impactItemText(e) {{
   let snaps = e.snap_pct !== null && e.snap_pct !== undefined ? `${{Math.round(e.snap_pct * 100)}}% snaps` : '';
   if (e.carry_share) snaps += (snaps ? ', ' : '') + `${{Math.round(e.carry_share * 100)}}% of RB carries`;
   const inj = e.injury ? ` (${{e.injury}})` : '';
-  return `${{e.name}}, ${{e.team}} ${{e.position}}${{snaps ? ', ' + snaps : ''}} -- ${{e.status}}${{inj}}: ${{e.reason}}`;
+  return `${{e.name}}, ${{e.team}} ${{e.position}}${{snaps ? ', ' + snaps : ''}} -- ${{e.status}}${{inj}}${{e.source === 'espn' ? ' [ESPN]' : ''}}: ${{e.reason}}`;
 }}
 
 function impactTags(r) {{
@@ -3616,7 +3632,7 @@ function openPlayerModal(playerName) {{
     if (inj.primary_injury) injParts.push('(' + inj.primary_injury + ')');
     if (inj.practice_status && inj.source !== 'practice') injParts.push('-- ' + inj.practice_status);
     const injClass = (inj.status === 'Out' || inj.status === 'Doubtful') ? 'weather-bad' : 'wind-med';
-    const injSrc = inj.source === 'practice' ? '(NFL practice report -- no game designation yet)' : '(NFL official injury report)';
+    const injSrc = inj.source === 'practice' ? '(NFL practice report -- no game designation yet)' : (inj.source === 'espn' ? '(ESPN injury news' + (inj.note ? ': ' + escapeHtml(inj.note) : '') + ')' : '(NFL official injury report)');
     metaParts.push('&#9937;&#65039; <span class="' + injClass + '">' + escapeHtml(injParts.join(' ')) + '</span> ' + injSrc);
   }}
   const roleReasons = first.role_changes || [];
@@ -4816,6 +4832,12 @@ document.addEventListener('click', (e) => {{
   if (currentModalPlayer) openPlayerModal(currentModalPlayer);
 }});
 
+// Show UTC timestamps (e.g. the injuries note) in the viewer's own time.
+document.querySelectorAll('.local-time[data-utc]').forEach(el => {{
+  const t = new Date(el.dataset.utc);
+  if (!isNaN(t)) el.textContent = t.toLocaleString([], {{ weekday: 'short', hour: 'numeric', minute: '2-digit' }});
+}});
+
 render();
 initSync();
 </script>
@@ -4876,6 +4898,7 @@ def main():
         season=stats["season"],
         week=stats["week"],
         stats_time=stats["generated_at"],
+        injuries_meta=injuries_meta_html(),
         odds_time=odds["generated_at"] if odds else "not fetched",
         odds_time_utc=odds_time_utc(odds),
         no_odds_note=no_odds_note,
