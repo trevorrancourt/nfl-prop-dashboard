@@ -3186,3 +3186,17 @@ Trevor: "tre tucker is a perfect must bet this week ... xavier hutchinson and ja
 ## Excused misses: top 5 → top 10 (2026-10-16)
 
 Trevor, looking at Javonte Williams Rec Yds O 14.5 (3/4, the only miss vs #1 BAL): "maybe like we could do it where it's less rigid than top 5, maybe make it top 10 on either side". `EXCUSE_TOUGH_TOP` 5 → 10: a player's miss against one of the 10 toughest defenses for that stat (Over), or one of the 10 softest (Under), no longer counts against his Hit rate. Unchanged: hits are never removed, the adjustment needs 3+ games left (`CONS_MIN_GAMES`), and MUST BET still needs a raw perfect record. Hover text now says "one of the 10 toughest/softest matchups". (His row was already 🔥🔥🔥 under top 5 in a local rerun, since BAL is #1.)
+
+## RB injuries by carry share + injury heads-up; "cheap hits" held back (2026-10-16)
+
+Trevor on D'Andre Swift Rush Yds Under (🧊🧊🧊 at ~60.5 vs ATL): (A) "kyle monangai was injured and it doesn't show that"; (B) "atlanta has been good against bad run teams and bad against good run teams ... why would swift be an under".
+
+- **(A) Why Monangai didn't show:** he's "Missed practice" (thumb, severity 1, no game designation), and at 40.5% snaps he failed `IMPACT_SNAP_PCT` (50%), although he had 10/10/10/30 carries. Two fixes shipped:
+  - `rb_carry_shares()` / `injured_has_role()`: an RB with 25%+ of his team's RB carries in the games he played (`RB_CARRY_SHARE_ROLE`, Trevor: "as high as 25% counts") is a real role. Monangai is 45%. The 🩹 hover now shows "% of RB carries".
+  - `roleSoftReasons()`: a real-role own-team QB/RB/WR/TE who is Questionable or missed practice shows as a faded ⚠️ "Heads-up (not blocking)" in the hover, also on MUST BET. Out/Doubtful still blocks MUST BET.
+  - Not built: bumping the player's share when a teammate is out. Trevor: "what about like other backs filling that role?" Instead, the ⚠️ role change covers it once the teammate is Out/Doubtful.
+- **(B) Why ATL looked like an Under defense:** at 60.5 scaled to Swift's 48% share, ATL "held" NO (usually 34), GB (34) and CAR (54) and allowed 85 to BAL. The excused-miss rule only removes misses, never "cheap hits" vs offenses that wouldn't reach the line anyway. Also, the new top-10 excuse removed Swift's 84 vs PHI (#24 soft).
+  - Built and tested, **not shipped:** a "cheap hit" (defense-side hit where the offense's usual is under 75% of the line for an Under, or 1.33x+ for an Over) doesn't count; too few real tests left means no rate, so no signal. Swift lost the 🧊 as intended.
+  - Board-wide, with every line at the player's median (Wk 2-5), tiers [none,1,2,3,MUST] went from [1197,125,209,101,40] to [1576,25,51,19,1]. At 0.6: [1493,52,88,38,1]. At 0.5: [1450,69,104,48,1].
+  - MUST BET collapses because it needs 4 real defense tests inside a 4-week window. With MUST BET needing 3 real tests instead: 0.6 gives [..,35,4], 0.5 gives [..,44,5].
+  - Held for Trevor's decision on how strict to be.

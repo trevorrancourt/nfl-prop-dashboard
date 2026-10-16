@@ -317,7 +317,41 @@ def compute_trade_flags(player_id, pos, team, trades):
     return out
 
 
-def compute_injury_impacts(pos, stat_col, player_id, team, opponent, injuries_by_team):
+# RBs split snaps in committees, so a back with a real workload can sit
+# under IMPACT_SNAP_PCT (Kyle Monangai: 40% of snaps but 10-30 carries a
+# game). A back also counts as a real role at RB_CARRY_SHARE_ROLE of his
+# team's RB carries in the games he played (2026-10-16, per Trevor: "i'd
+# say as high as 25% counts").
+RB_CARRY_SHARE_ROLE = 0.25
+
+
+def rb_carry_shares(stats):
+    """{player_id: share of his team's RB carries in the weeks he played}."""
+    team_week = {}
+    for info in stats.get("players", {}).values():
+        if info.get("position") != "RB":
+            continue
+        for g in info.get("recent_games", []):
+            k = (g["team"], g["week"])
+            team_week[k] = team_week.get(k, 0) + (g.get("carries") or 0)
+    out = {}
+    for pid, info in stats.get("players", {}).items():
+        if info.get("position") != "RB":
+            continue
+        mine = sum(g.get("carries") or 0 for g in info.get("recent_games", []))
+        total = sum(team_week.get((g["team"], g["week"]), 0) for g in info.get("recent_games", []))
+        if total:
+            out[pid] = mine / total
+    return out
+
+
+def injured_has_role(e, carry_shares):
+    if e.get("snap_pct") is not None and e["snap_pct"] >= IMPACT_SNAP_PCT:
+        return True
+    return INJURY_POSITION_GROUP.get(e["position"]) == "RB" and (carry_shares or {}).get(e["gsis_id"], 0) >= RB_CARRY_SHARE_ROLE
+
+
+def compute_injury_impacts(pos, stat_col, player_id, team, opponent, injuries_by_team, carry_shares=None):
     """{"helps": [...], "hurts": [...]} for one stat row, or None if
     nothing applies. Each entry names the injured player, his team,
     position, status, injury, snap share, and why it matters here."""
@@ -332,8 +366,8 @@ def compute_injury_impacts(pos, stat_col, player_id, team, opponent, injuries_by
                 continue  # his own injury is the ⛑️ badge, not this one
             if INJURY_POSITION_GROUP.get(e["position"]) != group:
                 continue
-            if e.get("snap_pct") is None or e["snap_pct"] < IMPACT_SNAP_PCT:
-                continue  # not a real starter -- his absence changes little
+            if not injured_has_role(e, carry_shares):
+                continue  # not a real starter (snaps, or RB carry share) -- his absence changes little
             item = {
                 "name": e["name"],
                 "team": team if side == "own" else opponent,
@@ -342,6 +376,7 @@ def compute_injury_impacts(pos, stat_col, player_id, team, opponent, injuries_by
                 "severity": e["severity"],
                 "injury": e.get("injury"),
                 "snap_pct": e["snap_pct"],
+                "carry_share": round((carry_shares or {}).get(e["gsis_id"], 0), 2) if INJURY_POSITION_GROUP.get(e["position"]) == "RB" else None,
                 "reason": reason,
             }
             (helps if effect > 0 else hurts).append(item)
@@ -510,6 +545,7 @@ def build_rows(stats, odds_lookup, weather, injuries, injuries_by_team):
     rows = []
     team_totals = stats.get("team_position_totals", {})
 
+    carry_shares = rb_carry_shares(stats)
     for player_id, info in stats["players"].items():
         player_name = info.get("name", player_id)
         pos = info["position"]
@@ -617,7 +653,7 @@ def build_rows(stats, odds_lookup, weather, injuries, injuries_by_team):
                     # since e.g. an opposing DT out helps an RB's rushing
                     # but not his receiving.
                     "injury_impacts": compute_injury_impacts(
-                        pos, stat_col, player_id, info["team"], opp, injuries_by_team
+                        pos, stat_col, player_id, info["team"], opp, injuries_by_team, carry_shares
                     ),
                     "trade_flags": compute_trade_flags(player_id, pos, info["team"], stats.get("trades")),
                 }
@@ -2266,6 +2302,19 @@ function weatherClass(r) {{
 // Any of these keeps a row from being a MUST BET (held at 3).
 const ROLE_INJURY_POSITIONS = new Set(['QB', 'RB', 'HB', 'FB', 'WR', 'TE']);
 function roleKey(r) {{ return 'role|' + WEEK + '|' + r.player + '|' + r.team; }}
+// Heads-up only (2026-10-16): a real-role teammate who is Questionable or
+// missed practice. Shown in the ⚠️ hover (faded tag), never blocks.
+function roleSoftReasons(r) {{
+  const imp = r.injury_impacts;
+  if (!imp) return [];
+  const out = [], seen = new Set();
+  for (const e of [].concat(imp.helps || [], imp.hurts || [])) {{
+    if (e.team !== r.team || e.severity >= 3 || !ROLE_INJURY_POSITIONS.has(e.position) || seen.has(e.name)) continue;
+    seen.add(e.name);
+    out.push(`${{e.name}} (${{e.position}}) ${{e.status}}${{e.injury ? ' (' + e.injury + ')' : ''}} -- may not play: ${{e.reason}}`);
+  }}
+  return out;
+}}
 function roleChangeReasons(r) {{
   const out = (r.trade_flags || []).slice();
   const imp = r.injury_impacts;
@@ -2281,9 +2330,12 @@ function roleChangeReasons(r) {{
   return out;
 }}
 function roleTag(r) {{
-  if (!r.role_changes || !r.role_changes.length) return '';
-  const head = r.role_capped ? 'Held at 3 instead of MUST BET -- role change:' : 'Role change:';
-  return ` <span class="cov-tag impact-hurt" style="margin-left:3px" title="${{escapeHtml(head + '\\n- ' + r.role_changes.join('\\n- '))}}">&#9888;&#65039;</span>`;
+  const hard = r.role_changes || [], soft = r.role_soft || [];
+  if (!hard.length && !soft.length) return '';
+  const parts = [];
+  if (hard.length) parts.push((r.role_capped ? 'Held at 3 instead of MUST BET -- role change:' : 'Role change:') + '\\n- ' + hard.join('\\n- '));
+  if (soft.length) parts.push('Heads-up (not blocking):\\n- ' + soft.join('\\n- '));
+  return ` <span class="cov-tag impact-hurt${{hard.length ? '' : ' impact-soft'}}" style="margin-left:3px" title="${{escapeHtml(parts.join('\\n'))}}">&#9888;&#65039;</span>`;
 }}
 
 function tierEmojiSpan(emo, r) {{
@@ -2299,7 +2351,7 @@ function signalEmoji(r) {{
     const side = r.hot_level === 4 ? 'Over' : 'Under';
     const bar = Math.round(MUST_BET_EDGE_PCT * 100);
     const title = SIGNAL_MODE === 'consistency' && r.cons ? `MUST BET (consistency): he cleared ${{r.cons.side}} ${{r.cons.line}} in EVERY game (${{fmtHit(r.cons.pHits, r.cons.pGames)}}), ${{r.opponent}} allowed it in EVERY game (${{fmtHit(r.cons.dHits, r.cons.dGames)}}), and ${{r.opponent}} is one of the 10 defenses allowing the ${{r.cons.side === 'over' ? 'most' : 'least'}} of this stat.` : `Edge AND Anc. Edge both clear a FIXED ${{bar}}% bar on the ${{side}} -- the rarest, highest-conviction tier on this page (above the usual 3-flame/3-ice max). Unlike 1-3 flame/ice, this bar does not move with the "How picky" slider -- it's meant to always mean the same absurd thing. It also requires a perfect record over your selected weeks -- zero games where the player landed on the wrong side of the line -- so a single bad week always blocks it, no matter how big the average edge looks. And the matchup has to fit (an Over needs a defense in the 10 that allow the most of this stat, an Under one of the 10 that allow the least), and his games can't swing more than ${{Math.round(MAX_TIER3_REL_SD * 100)}}% of the line.`;
-    return `<span class="cov-tag mustbet-tag" title="${{escapeHtml(title)}}">&#11088; MUST BET</span>`;
+    return `<span class="cov-tag mustbet-tag" title="${{escapeHtml(title)}}">&#11088; MUST BET</span>` + roleTag(r);
   }}
   if (r.hot_level > 0) return tierEmojiSpan('\U0001F525'.repeat(r.hot_level), r);
   if (r.cold_level > 0) return tierEmojiSpan('\U0001F9CA'.repeat(r.cold_level), r);
@@ -2401,7 +2453,8 @@ function injuryTag(r) {{
 // Out/Doubtful; faded when it's only Questionable/missed-practice, since
 // those players may well suit up.
 function impactItemText(e) {{
-  const snaps = e.snap_pct !== null && e.snap_pct !== undefined ? `${{Math.round(e.snap_pct * 100)}}% snaps` : '';
+  let snaps = e.snap_pct !== null && e.snap_pct !== undefined ? `${{Math.round(e.snap_pct * 100)}}% snaps` : '';
+  if (e.carry_share) snaps += (snaps ? ', ' : '') + `${{Math.round(e.carry_share * 100)}}% of RB carries`;
   const inj = e.injury ? ` (${{e.injury}})` : '';
   return `${{e.name}}, ${{e.team}} ${{e.position}}${{snaps ? ', ' + snaps : ''}} -- ${{e.status}}${{inj}}: ${{e.reason}}`;
 }}
@@ -3330,6 +3383,7 @@ function enrichRow(r, weeks, defCache) {{
     tiebreak: tb,
     suppressed_by: suppressedBy,
     role_changes: roleChanges,
+    role_soft: roleSoftReasons(r),
     role_capped: roleCapped,
   }});
 }}
