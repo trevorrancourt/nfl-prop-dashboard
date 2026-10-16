@@ -3275,3 +3275,11 @@ Trevor (after the ⚠️ explanation): "i think i don't even want that in 3 star
 - The header legend now describes the three groups.
 - `notify.apply_own_flags` drops a person's manually flagged players from their alert entirely (it used to downgrade MUST BET → 3).
 - Sim (Wk 2-5, lines at median): [none,1,2,3,MUST] = [1561,0,0,73,38], 436 ❓. A simulated key-teammate-Out MUST BET → ❓ with the reason.
+
+## 💡 status (2026-10-16)
+
+Trevor: "put high end question marks and question marks with positive game scripts as a separate status. 💡"
+
+- In `enrichRow`, after the tiebreak: a ❓ row (`needsReview`) with no role change and no matchup mismatch (`mismatchFlag`) gets `idea_reason` if it was demoted from 2 (`demotedFrom === 2`, "high end: would have been a 2-star"), or if `tb.script.effect > 0` ("game script supports the Over/Under (…)"). Both reasons can apply.
+- Shown as 💡 (hover: why + the ❓ reason + second look). `signal_rank` 5, so it sorts after 3-star (6) and before ❓ (3). "Hide ❓ rows" keeps 💡. Not alerted.
+- Sim (Wk 2-5, lines at median): ⭐39 / 3-star 73 / 💡163 (138 high-end, 43 script) / ❓272.

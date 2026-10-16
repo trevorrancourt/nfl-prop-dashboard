@@ -66,6 +66,7 @@ It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of
   - The choice is saved in localStorage `nfl_prop_dashboard_signal_mode`.
   - If Trevor says signals "disappeared", check this first.
 - **Three groups only (2026-10-16, per Trevor: "bet the must bets, review the three stars and then like have everything else"):** ⭐ MUST BET, 🔥🔥🔥/🧊🧊🧊, and ❓. Rows that compute to 1 or 2 are shown as ❓ with "Would have been 🔥🔥 …" (`demoteWhy` in enrichRow). The underlying tiers:
+  - **💡** (2026-10-16, per Trevor) sits between 3-star and ❓: a ❓ that would have been a 2-star, or whose 🎬 game script supports its side (`ideaReason`, `signal_rank` 5). Never for role-change or matchup-mismatch ❓s. "Hide ❓ rows" keeps 💡.
   - 1 = player and defense both ≥75% but player not perfect (→ ❓).
   - 2 = player perfect and defense ≥2/3 (→ ❓).
   - 3 = player perfect, defense ≥75%, and a top-10 matchup (otherwise capped at 2).

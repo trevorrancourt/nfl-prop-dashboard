@@ -2497,6 +2497,10 @@ function signalEmoji(r) {{
     const title = `Stat edge agreed on the ${{r.suppressed_by.side}}, but its price (${{priceStr}}, needs to hit ~${{prob}}% of the time just to break even) is worse than the ${{MAX_JUICE_PRICE}} cutoff -- suppressed rather than flagged.`;
     return `<span class="cov-tag cov-medium" title="${{escapeHtml(title)}}">price</span>`;
   }}
+  if (r.idea_reason) {{
+    const title = `💡 Worth a closer look -- ${{r.idea_reason}}.\n\n${{r.review_reason || ''}}` + (r.tiebreak ? `\n\nSecond look on the ${{r.tiebreak.lean === 'over' ? 'Over' : 'Under'}}:\n` + secondLookText(r.tiebreak) : '');
+    return `<span class="cov-tag cov-review" title="${{escapeHtml(title)}}">&#128161;</span>`;
+  }}
   if (r.needs_review) {{
     // Edge and Anc. Edge didn't confidently agree, but one of them is
     // significant enough on its own to be worth a manual look -- see
@@ -3341,6 +3345,7 @@ function enrichRow(r, weeks, defCache) {{
   let tierCapReason = null;
   const cons = consistencyStats(r, weeks, derived.share, ranks);
   let consReview = false, consReviewReason = null;
+  let mismatchFlag = false;
   if (SIGNAL_MODE === 'consistency' && cons && cons.pGames >= consMinGames(weeks) && cons.dGames >= consMinGames(weeks)) {{
     const p = cons.pRate, d = cons.dRate, perfect = p === 1;
     let lvl = 0;
@@ -3356,6 +3361,7 @@ function enrichRow(r, weeks, defCache) {{
       }}
     }}
     const mismatch = lvl > 0 ? matchupMismatch(r, cons, weeks) : null;
+    if (mismatch) mismatchFlag = true;
     if (mismatch) lvl = 0;
     if (cons.side === 'over') hotLevel = lvl; else coldLevel = lvl;
     if (lvl === 0 && perfect) {{
@@ -3470,7 +3476,7 @@ function enrichRow(r, weeks, defCache) {{
   // stars"), instead of holding it at 3.
   const roleChanges = roleChangeReasons(r);
   const roleCapped = false;
-  let demoteWhy = null;
+  let demoteWhy = null, demotedFrom = 0;
   {{
     const lvlNow = Math.max(hotLevel, coldLevel);
     const sideNow = hotLevel > coldLevel ? 'over' : 'under';
@@ -3482,7 +3488,7 @@ function enrichRow(r, weeks, defCache) {{
     }} else if (lvlNow === 1 || lvlNow === 2) {{
       demoteWhy = `Would have been ${{was}} (${{sideNow}}) -- below the 3-star bar.` + consLine + (tierCapReason ? ` Held under 3 by ${{tierCapReason}}.` : '');
     }}
-    if (demoteWhy) {{ hotLevel = 0; coldLevel = 0; }}
+    if (demoteWhy) {{ demotedFrom = lvlNow; hotLevel = 0; coldLevel = 0; }}
   }}
 
   const hot = hotLevel > 0;
@@ -3550,7 +3556,7 @@ function enrichRow(r, weeks, defCache) {{
   else if (hotLevel === 3 || coldLevel === 3) signalRank = 6;
   else if (hotLevel === 2 || coldLevel === 2) signalRank = 5;
   else if (hotLevel === 1 || coldLevel === 1) signalRank = 4;
-  else if (needsReview) signalRank = 3;
+  else if (needsReview) signalRank = 3; // 💡 rows go to 5 in the returned signal_rank
   else if (suppressedBy) signalRank = 2;
 
   // Second-look checklist on the side the signal points to (see tiebreak()).
@@ -3568,6 +3574,19 @@ function enrichRow(r, weeks, defCache) {{
   const tbDefRank = ranks[r.opponent] === undefined ? null : ranks[r.opponent];
   const tb = tbLean ? tiebreak(r, derived, tbLean, tbDefRank, Object.keys(ranks).length, tbFromAnc, weeks) : null;
 
+  // 💡 (added 2026-10-16, per Trevor: "put high end question marks and
+  // question marks with positive game scripts as a separate status"): a ❓
+  // that would have been a 2-star, or whose game script supports its side.
+  // Not for ❓s caused by a role change or a matchup mismatch -- those are
+  // the "don't trust it" ones.
+  let ideaReason = null;
+  if (needsReview && !roleChanges.length && !mismatchFlag) {{
+    const why = [];
+    if (demotedFrom === 2) why.push('high end: would have been a 2-star');
+    if (tb && tb.script && tb.script.effect > 0) why.push(`game script supports the ${{tb.lean === 'over' ? 'Over' : 'Under'}} (${{tb.script.text}})`);
+    if (why.length) ideaReason = why.join('; ');
+  }}
+
   return Object.assign({{}}, r, derived, {{
     def_avg_allowed: defAvgRounded,
     def_rank: ranks[r.opponent] === undefined ? null : ranks[r.opponent],
@@ -3578,11 +3597,12 @@ function enrichRow(r, weeks, defCache) {{
     hot: hot,
     cold: cold,
     needs_review: needsReview,
+    idea_reason: ideaReason,
     review_reason: demoteWhy || ((SIGNAL_MODE === 'consistency' && needsReview) ? consReviewReason : reviewReason),
     hot_level: hotLevel,
     cold_level: coldLevel,
     signal: signal,
-    signal_rank: signalRank,
+    signal_rank: ideaReason ? 5 : signalRank, // 💡 sorts between 3-star (6) and ❓ (3)
     tier_sd: tierSd,
     tier_rel_sd: tierRelSd,
     tier_cap_reason: tierCapReason,
@@ -3620,7 +3640,7 @@ function render() {{
   document.getElementById('th-recent-avg').textContent = 'Avg (' + weeksLabel(selectedWeeks) + ')';
   // The How-picky slider only drives the Average-edge formula.
   if (SIGNAL_MODE === 'consistency') {{
-    document.getElementById('pickyLabel').textContent = '⭐ MUST BET = bet it: every game on both sides (4+ games), top-10 matchup  ·  🔥🔥🔥/🧊🧊🧊 = review: he cleared it every game, defense 75%+, top-10 matchup  ·  ❓ = everything else worth a look (weaker hit rates, role changes, matchup questions -- hover for why)' + signalSampleNote();
+    document.getElementById('pickyLabel').textContent = '⭐ MUST BET = bet it: every game on both sides (4+ games), top-10 matchup  ·  🔥🔥🔥/🧊🧊🧊 = review: he cleared it every game, defense 75%+, top-10 matchup  ·  💡 = high-end ❓ (would have been 2-star) or the game script backs it  ·  ❓ = everything else worth a look (weaker hit rates, role changes, matchup questions -- hover for why)' + signalSampleNote();
   }} else {{
     applyPickySetting();
   }}
@@ -3640,7 +3660,7 @@ function render() {{
       (activeStat === 'ALL' || r.stat_label === activeStat) &&
       (activeGame === 'ALL' || gameKey(r) === activeGame) &&
       (!hideMarkedX || MARKS[markKey(r)] !== 'pass') &&
-      (!hideReview || !r.needs_review) &&
+      (!hideReview || !r.needs_review || r.idea_reason) && // Hide ❓ keeps 💡
       (!ladderOnly || ladderInfo(r) !== null) &&
       (!weakMatchupOnly || isWeakMatchup(r)) &&
       (!strongMatchupOnly || isStrongMatchup(r)) &&
