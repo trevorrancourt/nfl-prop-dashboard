@@ -68,7 +68,7 @@ It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of
   - ⭐ MUST BET = both sides perfect, 4+ games each, top-10 matchup (Over: one of the 10 defenses allowing the most; Under: one of the 10 allowing the least).
   - Price gate: worse than -130 blocks a signal.
 - **Excused misses:**
-  - A player's miss doesn't count against a top-5 tough defense.
+  - A player's miss doesn't count against a top-10 tough defense (top-10 soft for an Under; `EXCUSE_TOUGH_TOP`, raised from 5 on 2026-10-16 per Trevor).
   - A defense's miss doesn't count against an offense whose usual output is under 0.75× the line.
   - The adjusted rate applies only if enough games remain.
 - **Role changes block MUST BET** (2026-10-16, per Trevor: "lines that are a result of injuries, trade, personnel issues"). Such a row is held at 3 with a ⚠️ tag; alerts send it as a 3-star with "⚠️ role change". Three sources:

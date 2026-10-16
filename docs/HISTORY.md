@@ -3182,3 +3182,7 @@ Trevor: "tre tucker is a perfect must bet this week ... xavier hutchinson and ja
 - **Manual:** the player popup has "⚠️ Flag role change" (undo), stored as `MARKS['role|WEEK|player|team'] = 'flux'`, so it syncs. notify.py's `apply_own_flags()` applies each person's own flags to their alert.
 - **Effect:** in `enrichRow`, a level 4 with any role change becomes 3 (`role_capped`). `roleTag()` adds ⚠️ with the reasons to any signalled row. check_must_bets passes `roleChange`, and alert lines get "· ⚠️ role change".
 - **Tested:** with every line forced to 0.5 there were 167 MUST BETs and 0 with a role change; 16 rows were held at 3 with the tag; the simulated injury capped its row; the manual flag on/off removed and restored the MUST BET and saved the mark; alert flags only affect their owner. Sync and multi-person alert tests still pass.
+
+## Excused misses: top 5 → top 10 (2026-10-16)
+
+Trevor, looking at Javonte Williams Rec Yds O 14.5 (3/4, the only miss vs #1 BAL): "maybe like we could do it where it's less rigid than top 5, maybe make it top 10 on either side". `EXCUSE_TOUGH_TOP` 5 → 10: a player's miss against one of the 10 toughest defenses for that stat (Over), or one of the 10 softest (Under), no longer counts against his Hit rate. Unchanged: hits are never removed, the adjustment needs 3+ games left (`CONS_MIN_GAMES`), and MUST BET still needs a raw perfect record. Hover text now says "one of the 10 toughest/softest matchups". (His row was already 🔥🔥🔥 under top 5 in a local rerun, since BAL is #1.)

@@ -574,7 +574,8 @@ dropdown next to the matchup filters (your choice is remembered):
 - **Opponent-adjusted hit rates (added 2026-10-05):** a miss can be
   "excused" when the opponent explains it, shown in brackets like
   `O 2/4 (2/3)` and marked `~` in the hover. In **Hit**, a miss against one
-  of the 5 toughest defenses for that stat (5 softest for an Under). In
+  of the 10 toughest defenses for that stat (10 softest for an Under; was 5
+  until 2026-10-16). In
   **Opp Hit**, a miss against an offense that rarely produces the stat
   itself -- its usual output (from its other games, scaled to his share)
   is under 75% of the line (over ~1.33x the line for an Under). E.g.

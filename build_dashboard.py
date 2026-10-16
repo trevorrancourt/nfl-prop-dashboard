@@ -2956,7 +2956,9 @@ try {{
 // Adjusted rate = hits / (games - excused misses), used when at least
 // CONS_MIN_GAMES games remain; hits are never removed. Shown in brackets,
 // e.g. "O 3/4 (3/3)". MUST BET still needs a raw perfect player record.
-const EXCUSE_TOUGH_TOP = 5;
+// Was 5 until 2026-10-16; Trevor: "less rigid than top 5, maybe make it top
+// 10 on either side" (prompted by Javonte Williams' only miss coming vs #1 BAL).
+const EXCUSE_TOUGH_TOP = 10;
 const EXCUSE_OFF_RATIO = 0.75;
 const _offenseCache = {{}};
 function offenseGames(key, pos, weeks) {{
@@ -3041,7 +3043,7 @@ function hitCellHtml(r, which) {{
   let lines;
   if (isP) {{
     lines = [`${{r.player}}: ${{c.side}} ${{c.line}} in ${{h}} of ${{g}} games` + (c.worst !== null ? ` (worst game ${{c.worst >= 0 ? '+' : ''}}${{r1(c.worst)}} vs the line)` : '')];
-    for (const x of c.pg) lines.push(`${{x.hit ? '✔' : (x.excused ? '~' : '✘')}} Wk${{x.week}} vs ${{x.opp}}: ${{r1(x.val)}}` + (x.orank !== undefined ? ` (${{x.opp}} #${{x.orank}} vs ${{r.position}} ${{r.stat_label}})` : '') + (x.excused ? ' -- excused, one of the toughest matchups' : ''));
+    for (const x of c.pg) lines.push(`${{x.hit ? '✔' : (x.excused ? '~' : '✘')}} Wk${{x.week}} vs ${{x.opp}}: ${{r1(x.val)}}` + (x.orank !== undefined ? ` (${{x.opp}} #${{x.orank}} vs ${{r.position}} ${{r.stat_label}})` : '') + (x.excused ? ` -- excused, one of the ${{EXCUSE_TOUGH_TOP}} ${{c.side === 'over' ? 'toughest' : 'softest'}} matchups` : ''));
   }} else {{
     lines = [`${{r.opponent}}'s games, scaled to his ${{Math.round((c.share || 0) * 100)}}% share: ${{h}} of ${{g}} ${{c.side}} ${{c.line}}`];
     for (const x of c.dg) lines.push(`${{x.hit ? '✔' : (x.excused ? '~' : '✘')}} Wk${{x.week}} vs ${{x.vs}}: ${{r1(x.val)}}` + (x.usual !== null ? ` (${{x.vs}} usually gets ${{r1(x.usual)}})` : '') + (x.excused ? (c.side === 'over' ? ' -- excused, that offense rarely does this' : ' -- excused, that offense always piles this up') : ''));
