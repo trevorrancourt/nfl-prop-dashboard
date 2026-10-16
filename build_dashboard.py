@@ -22,6 +22,14 @@ DATA_DIR = Path(__import__("os").environ.get("NFL_DATA_DIR") or (ROOT / "data"))
 OUTPUT_DIR = ROOT / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
+# Supabase sign-in, so marks/bets sync across devices (added 2026-10-16).
+# Both values come from Supabase > Project Settings > API and are meant to
+# be public: row-level security on the user_state table is what keeps each
+# person's data private. NEVER put the service_role key here. Left blank,
+# the page has no sign-in and works exactly as before (localStorage only).
+SUPABASE_URL = __import__("os").environ.get("SUPABASE_URL", "")
+SUPABASE_ANON_KEY = __import__("os").environ.get("SUPABASE_ANON_KEY", "")
+
 # (stat column in stats_cache, Odds API market key, display label) per
 # position. "total_tds" is the Anytime-TD-Scorer stat: rushing_tds +
 # receiving_tds (any TD the player himself scored) -- for a QB that's
@@ -785,6 +793,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <button type="button" class="weeks-mini-btn weeks-quick" data-last="all" title="Every week played so far (the default).">All played</button>
     </span>
     <button type="button" id="myBetsBtn" class="pos-btn" style="margin-left:16px;" title="Every bet you've marked &#9989; (all weeks, not just this one), with result tracking: record, total staked, and profit.">&#128210; My Bets</button>
+    <span id="syncCtl" style="display:none; margin-left:10px;"></span>
   </div>
   <div class="controls">
     <span class="muted" id="pickyLabel"></span>
@@ -998,6 +1007,7 @@ function saveMarks() {{
     // storage full/blocked -- the mark still shows for this page load via
     // the in-memory MARKS object, it just won't survive a reload
   }}
+  scheduleSync(); // no-op unless signed in (see "Sign-in + cross-device sync")
 }}
 let MARKS = loadMarks();
 
@@ -1032,8 +1042,260 @@ function saveBets() {{
   }} catch (e) {{
     // storage blocked/full -- kept in memory for this page load only
   }}
+  scheduleSync();
 }}
 let BETS = loadBets();
+
+// ---- Sign-in + cross-device sync (added 2026-10-16, per Trevor: "login so
+// my bets sync across devices"). Supabase email magic link, plus one row
+// per user in public.user_state holding {{marks, bets}}. Signed out, nothing
+// changes: localStorage only, exactly as before. Signed in, every
+// saveMarks()/saveBets() also pushes to the account (debounced), and the
+// account copy is pulled in on load and whenever the tab comes back into
+// view. The merge is three-way against the last copy this browser synced
+// (SYNC_BASE), so a bet removed on the phone stays removed on the laptop,
+// and different bets edited on two devices both survive. First sign-in on
+// a device has an empty base, so everything on this device is ADDED to the
+// account and nothing is deleted. Hidden entirely until SUPABASE_URL /
+// SUPABASE_ANON_KEY are set in build_dashboard.py, and on the Mac's
+// file:// copy (the emailed link can only open the shared site).
+const SUPABASE_CFG = {supabase_config_json};
+const SUPABASE_JS_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';
+const LIVE_SITE_URL = 'https://trevorrancourt.github.io/nfl-prop-dashboard/';
+let sb = null;            // Supabase client, once the library loads
+let syncUser = null;      // signed-in user, or null
+let syncTimer = null;
+let syncBusy = false;
+let syncAgain = false;
+let syncSuppress = false; // true while writing synced data back to localStorage
+let syncStatus = '';      // '', 'saving', 'ok', 'error', 'offline'
+
+function syncEnabled() {{
+  return !!(SUPABASE_CFG && SUPABASE_CFG.url && SUPABASE_CFG.key) && location.protocol.startsWith('http');
+}}
+function syncBaseKey() {{
+  return 'nfl_prop_dashboard_sync_base_v1|' + (syncUser ? syncUser.id : '');
+}}
+function loadSyncBase() {{
+  try {{
+    const v = JSON.parse(localStorage.getItem(syncBaseKey()) || 'null');
+    if (v && v.marks && v.bets) return v;
+  }} catch (e) {{}}
+  return {{ marks: {{}}, bets: {{}} }};
+}}
+function saveSyncBase(b) {{
+  try {{ localStorage.setItem(syncBaseKey(), JSON.stringify(b)); }} catch (e) {{}}
+}}
+function cloneJson(o) {{ return JSON.parse(JSON.stringify(o)); }}
+// Key-order-independent JSON: the database stores objects with its own key
+// order, so plain JSON.stringify would call every bet "changed".
+function stableStr(v) {{
+  if (v === null || typeof v !== 'object') return JSON.stringify(v);
+  if (Array.isArray(v)) return '[' + v.map(stableStr).join(',') + ']';
+  return '{{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + stableStr(v[k])).join(',') + '}}';
+}}
+// Applies the edits that turned `from` into `to` onto `target` (in place).
+function applyDiff(target, from, to) {{
+  for (const k of Object.keys(to)) {{
+    if (stableStr(to[k]) !== stableStr(from[k])) target[k] = cloneJson(to[k]);
+  }}
+  for (const k of Object.keys(from)) {{
+    if (!(k in to)) delete target[k];
+  }}
+  return target;
+}}
+function sameMap(a, b) {{
+  const ka = Object.keys(a), kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  return ka.every(k => (k in b) && stableStr(a[k]) === stableStr(b[k]));
+}}
+function replaceContents(obj, src) {{
+  for (const k of Object.keys(obj)) delete obj[k];
+  Object.assign(obj, src);
+}}
+
+function scheduleSync(delay) {{
+  if (!syncUser || syncSuppress) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncNow, delay === undefined ? 1500 : delay);
+  setSyncStatus('saving');
+}}
+
+async function syncNow() {{
+  if (!syncUser || !sb) return;
+  if (syncBusy) {{ syncAgain = true; return; }}
+  syncBusy = true;
+  const user = syncUser;
+  try {{
+    const base = loadSyncBase();
+    const snap = {{ marks: cloneJson(MARKS), bets: cloneJson(BETS) }};
+    let merged = null;
+    // Write only if the account row is still the one we read (same
+    // updated_at); if another device saved in between, re-read and re-merge
+    // so neither device's edits or deletes get overwritten.
+    for (let attempt = 0; attempt < 4 && !merged; attempt++) {{
+      const res = await sb.from('user_state').select('marks,bets,updated_at').eq('user_id', user.id).maybeSingle();
+      if (res.error) throw res.error;
+      const remote = {{ marks: (res.data && res.data.marks) || {{}}, bets: (res.data && res.data.bets) || {{}} }};
+      const m = {{
+        marks: applyDiff(cloneJson(remote.marks), base.marks, snap.marks),
+        bets: applyDiff(cloneJson(remote.bets), base.bets, snap.bets),
+      }};
+      if (res.data && sameMap(m.marks, remote.marks) && sameMap(m.bets, remote.bets)) {{ merged = m; break; }}
+      const row = {{ marks: m.marks, bets: m.bets, updated_at: new Date().toISOString() }};
+      if (res.data) {{
+        const up = await sb.from('user_state').update(row).eq('user_id', user.id).eq('updated_at', res.data.updated_at).select('user_id');
+        if (up.error) throw up.error;
+        if (up.data && up.data.length) merged = m;
+      }} else {{
+        row.user_id = user.id;
+        const ins = await sb.from('user_state').insert(row);
+        if (!ins.error) merged = m;
+        else if (ins.error.code !== '23505') throw ins.error; // 23505 = another device created the row first
+      }}
+    }}
+    if (!merged) throw new Error('account kept changing; will retry');
+    if (syncUser !== user) return; // signed out while this was running
+    saveSyncBase(merged);
+    // Anything typed while this was in flight is layered back on top.
+    const nextMarks = applyDiff(cloneJson(merged.marks), snap.marks, MARKS);
+    const nextBets = applyDiff(cloneJson(merged.bets), snap.bets, BETS);
+    if (!sameMap(nextMarks, MARKS) || !sameMap(nextBets, BETS)) {{
+      replaceContents(MARKS, nextMarks);
+      replaceContents(BETS, nextBets);
+      syncSuppress = true;
+      try {{ saveMarks(); saveBets(); }} finally {{ syncSuppress = false; }}
+      refreshAfterSync();
+    }}
+    setSyncStatus('ok');
+  }} catch (err) {{
+    console.warn('Sync failed (your marks/bets are still saved in this browser):', err);
+    setSyncStatus('error');
+  }} finally {{
+    syncBusy = false;
+    if (syncAgain) {{ syncAgain = false; scheduleSync(300); }}
+  }}
+}}
+
+// Redraws with the merged data, but never yanks the cursor out of a bet
+// slip you're typing in -- waits until you leave the box.
+function refreshAfterSync() {{
+  const a = document.activeElement;
+  if (a && a !== document.body && (a.tagName === 'INPUT' || a.tagName === 'SELECT' || a.tagName === 'TEXTAREA') && !a.closest('#syncCtl')) {{
+    a.addEventListener('blur', () => setTimeout(refreshAfterSync, 0), {{ once: true }});
+    return;
+  }}
+  render();
+  updateMyBetsButton();
+  if (myBetsOpen) openMyBetsModal();
+}}
+
+function syncStatusText() {{
+  if (syncStatus === 'saving') return 'Syncing&hellip;';
+  if (syncStatus === 'ok') return 'Synced';
+  if (syncStatus === 'error') return "Couldn't sync &middot; saved on this device, will retry";
+  if (syncStatus === 'offline') return 'Sign-in unavailable right now';
+  return '';
+}}
+function setSyncStatus(s) {{
+  syncStatus = s;
+  const el = document.getElementById('syncStatus');
+  if (el) el.innerHTML = syncStatusText();
+}}
+function renderSyncCtl() {{
+  const ctl = document.getElementById('syncCtl');
+  if (!ctl) return;
+  if (syncUser) {{
+    ctl.innerHTML = `<span class="muted" title="Your marks and bets are saved to your account and show up on any device where you sign in.">&#9729;&#65039; ${{escapeHtml(syncUser.email || 'Signed in')}} &middot; <span id="syncStatus">${{syncStatusText()}}</span></span>
+      <button type="button" class="weeks-mini-btn" id="syncSignOut">Sign out</button>`;
+  }} else {{
+    ctl.innerHTML = `<button type="button" class="pos-btn" id="syncSignInBtn" title="Sign in with your email to keep your marks and bets in sync across your phone, laptop, etc. Without signing in they stay in this browser only.">&#9729;&#65039; Sign in to sync</button>
+      <span id="syncForm" style="display:none;">
+        <input type="email" id="syncEmail" placeholder="you@email.com" autocomplete="email" style="background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:13px; width:190px;">
+        <button type="button" class="weeks-mini-btn" id="syncSend">Email me a sign-in link</button>
+      </span>
+      <span id="syncStatus" class="muted">${{syncStatus === 'offline' ? syncStatusText() : ''}}</span>`;
+  }}
+}}
+
+async function sendMagicLink() {{
+  const input = document.getElementById('syncEmail');
+  const msg = document.getElementById('syncStatus');
+  const btn = document.getElementById('syncSend');
+  const email = (input.value || '').trim();
+  if (email.indexOf('@') < 1) {{ msg.textContent = 'Type your email first.'; return; }}
+  if (!sb) {{ msg.textContent = 'Still loading, try again in a second.'; return; }}
+  btn.disabled = true;
+  msg.textContent = 'Sending...';
+  const res = await sb.auth.signInWithOtp({{ email: email, options: {{ emailRedirectTo: location.origin + location.pathname }} }});
+  btn.disabled = false;
+  msg.textContent = res.error
+    ? "Couldn't send: " + res.error.message
+    : 'Check your email and tap the link. Open it in this same browser.';
+}}
+
+function onAuthChange(session) {{
+  const u = session ? session.user : null;
+  if ((u ? u.id : null) === (syncUser ? syncUser.id : null)) return;
+  syncUser = u;
+  syncStatus = '';
+  renderSyncCtl();
+  if (u) setTimeout(() => syncNow(), 0); // not inside the auth callback (supabase-js can deadlock)
+  if (myBetsOpen) openMyBetsModal();
+}}
+
+function initSync() {{
+  const ctl = document.getElementById('syncCtl');
+  if (!ctl || !syncEnabled()) return;
+  ctl.style.display = '';
+  renderSyncCtl();
+  // A sign-in link that expired or was already used comes back with an error in the URL.
+  const hash = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const linkError = hash.get('error_description');
+  ctl.addEventListener('click', e => {{
+    const t = e.target;
+    if (t.id === 'syncSignInBtn') {{
+      const f = document.getElementById('syncForm');
+      f.style.display = f.style.display === 'none' ? '' : 'none';
+      if (f.style.display === '') document.getElementById('syncEmail').focus();
+    }} else if (t.id === 'syncSend') {{
+      sendMagicLink();
+    }} else if (t.id === 'syncSignOut') {{
+      // Signing out keeps everything on this device; it just stops syncing.
+      if (sb) sb.auth.signOut();
+    }}
+  }});
+  ctl.addEventListener('keydown', e => {{
+    if (e.key === 'Enter' && e.target.id === 'syncEmail') sendMagicLink();
+  }});
+  const s = document.createElement('script');
+  s.src = SUPABASE_JS_URL;
+  s.onload = () => {{
+    try {{
+      sb = window.supabase.createClient(SUPABASE_CFG.url, SUPABASE_CFG.key);
+    }} catch (err) {{
+      console.warn('Supabase init failed:', err);
+      setSyncStatus('offline');
+      return;
+    }}
+    sb.auth.onAuthStateChange((event, session) => {{
+      onAuthChange(session);
+      if (session && /access_token|refresh_token/.test(location.hash)) {{
+        history.replaceState(null, '', location.pathname + location.search);
+      }}
+    }});
+    if (linkError) {{
+      history.replaceState(null, '', location.pathname + location.search);
+      const msg = document.getElementById('syncStatus');
+      if (msg && !syncUser) msg.textContent = 'That sign-in link didn’t work (' + linkError + '). Send a new one.';
+    }}
+  }};
+  s.onerror = () => setSyncStatus('offline');
+  document.head.appendChild(s);
+  document.addEventListener('visibilitychange', () => {{
+    if (document.visibilityState === 'visible' && syncUser) scheduleSync(0);
+  }});
+}}
 
 function validBetLine(s) {{
   return s === undefined || s === '' || /^\d+(\.\d+)?$/.test(String(s).trim());
@@ -1370,7 +1632,9 @@ function openMyBetsModal() {{
   currentModalDefenseTeam = null;
   document.getElementById('modalPlayerName').textContent = 'My Bets';
   document.getElementById('modalMeta').innerHTML =
-    'Every &#9989; bet from every week, plus bets you add by hand (parlays, ladders). Saved in this browser only &middot; use Backup to copy it somewhere safe.';
+    'Every &#9989; bet from every week, plus bets you add by hand (parlays, ladders). '
+    + (syncUser ? 'Synced to your account (' + escapeHtml(syncUser.email || '') + '), so it shows on every device you sign in on.'
+       : 'Saved in this browser only' + (syncEnabled() ? ' &middot; sign in (next to My Bets) to sync across devices,' : ' &middot;') + ' use Backup to copy it somewhere safe.');
   const allList = allBets();
   const weekOptionsHtml = betsWeekOptions(allList);
   const list = filterBetsByWeek(allList);
@@ -4102,6 +4366,7 @@ function initColumns() {{
 
 initColumns();
 render();
+initSync();
 </script>
 </body>
 </html>
@@ -4162,6 +4427,9 @@ def main():
         team_results_json=json.dumps(stats.get("team_results", [])),
         injuries_by_team_json=json.dumps(injuries_by_team),
         board_switch_html=board_switch_html(),
+        supabase_config_json=json.dumps(
+            {"url": SUPABASE_URL, "key": SUPABASE_ANON_KEY} if SUPABASE_URL and SUPABASE_ANON_KEY else None
+        ),
     )
 
     import os

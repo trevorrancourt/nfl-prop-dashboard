@@ -5,7 +5,7 @@ Read this first in every session. The full build history (every version, decisio
 ## Who / what
 - Owner: Trevor (trevorrancourt). He bets NFL player props and uses this dashboard to find them. He isn't a developer: explain in plain words, keep steps short, and do the work yourself.
 - Live site: https://trevorrancourt.github.io/nfl-prop-dashboard/ (GitHub Pages, public link).
-- `.github/workflows/update.yml` rebuilds the site every 3 hours, 8am-8pm Mountain (cron in UTC), plus "Run workflow" on demand.
+- `.github/workflows/update.yml` rebuilds the site every 3 hours, 8am-8pm Mountain (cron in UTC), on every push to `main` (except docs/Markdown-only pushes), plus "Run workflow" on demand.
 - A copy of the project also lives on his Mac (`~/Documents/Gambling Program`), where `python3 run.py` builds `output/dashboard.html` locally. The repo is now the source of truth.
 
 ## How it works
@@ -60,14 +60,14 @@ The two boards link to each other.
 - Bets: `nfl_prop_dashboard_bets_v1` (key = `WEEK|player|team|stat_col`)
 - Columns: `nfl_prop_dashboard_cols_v1`
 - My Bets has Backup/Restore (JSON).
-- **Next up: login so bets sync across devices.** The plan Trevor agreed to:
+- **Login so bets sync across devices: code built 2026-10-16, waiting on Trevor's Supabase project.** Hidden until `SUPABASE_URL` / `SUPABASE_ANON_KEY` (top of `build_dashboard.py`) are filled in. Look for "Sign-in + cross-device sync" in the template. The merge is three-way against the last synced copy (`nfl_prop_dashboard_sync_base_v1|<user id>`), and writes are conditional on `updated_at` so two devices can't overwrite each other. Not available on the Mac's file:// copy. The plan Trevor agreed to:
   - **Supabase** (free) handles email magic-link sign-in, plus one table holding each user's marks and bets.
   - The site keeps working logged-out with localStorage. On first login, local marks/bets are merged into the account.
   - After that, every save also upserts to Supabase (debounced), and on load the account copy is merged in.
   - Trevor's setup steps, to walk him through:
     1. Create a free project at supabase.com.
     2. In SQL Editor, run the script below.
-    3. Authentication → URL Configuration: set Site URL to https://trevorrancourt.github.io/nfl-prop-dashboard/ and add it to Redirect URLs.
+    3. Authentication → URL Configuration: set Site URL to https://trevorrancourt.github.io/nfl-prop-dashboard/ and add `https://trevorrancourt.github.io/nfl-prop-dashboard/**` to Redirect URLs (the wildcard covers the Monday Night board too).
     4. Project Settings → API: give Claude the Project URL and the anon public key. Both are safe to put in the page; row-level security protects the data. Never use the service_role key.
   - SQL:
     ```sql
@@ -82,12 +82,12 @@ The two boards link to each other.
     create policy "insert own" on public.user_state for insert with check (auth.uid() = user_id);
     create policy "update own" on public.user_state for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
     ```
-  - Load supabase-js from a pinned CDN version (e.g. `@supabase/supabase-js@2.45.4` UMD on jsDelivr).
+  - Load supabase-js from a pinned CDN version: `@supabase/supabase-js@2.45.4/dist/umd/supabase.js` on jsDelivr (that version has no `supabase.min.js`).
   - Put a small "Sign in / signed in as …" control next to My Bets.
   - Hook `saveMarks()` / `saveBets()` and the load path. Keep the existing Backup/Restore.
 
 ## Deploying changes
-- **Every push to `main` should rebuild the site.** If `update.yml` has no `push:` trigger yet, add `push: branches: [main]` (ignore `docs/**` and `*.md` paths) as the first task.
+- **Every push to `main` rebuilds the site** (`push:` trigger added 2026-10-16; `docs/**` and `*.md` changes are ignored).
 - Push changes to `main` (or open a PR and merge it) so the site updates. A branch alone doesn't change the live site.
 - The cloud session's network may not reach the Odds API or Open-Meteo. To test a build locally, use `python run.py --skip-odds --skip-weather`; the real data refresh happens in GitHub Actions.
 

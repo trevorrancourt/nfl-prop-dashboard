@@ -3117,3 +3117,19 @@ Trevor chose GitHub Pages (public link), with a refresh every 3 hours from 8am t
 2. Then I create the public repo, push, and enable Pages (build_type workflow).
 3. Trevor adds the `ODDS_API_KEY` secret himself, so the key never passes through chat.
 4. Optional: install ntfy and add the `NTFY_TOPIC` secret.
+
+## Push trigger + Supabase sign-in sync (2026-10-16)
+
+**Push trigger:** `update.yml` now also runs on every push to `main`, skipping pushes that only touch `docs/**` or Markdown files.
+
+**Sign-in so marks/bets sync across devices** (the plan in CLAUDE.md):
+- New "Sign in to sync" control next to My Bets. Email magic link through Supabase; supabase-js 2.45.4 UMD loads from jsDelivr only when the config is set.
+- Config: `SUPABASE_URL` / `SUPABASE_ANON_KEY` at the top of `build_dashboard.py` (env vars override). Blank means no sign-in, and the page behaves exactly as before.
+- Signed out, nothing changes. Signed in, `saveMarks()` / `saveBets()` also sync (1.5 s debounce), and the page syncs on load and when the tab comes back into view.
+- The merge is three-way against the last copy this browser synced, so deletes carry over and edits from two devices to different bets both survive. First sign-in on a device adds its local data to the account and deletes nothing.
+- Writes only go through if the row's `updated_at` hasn't changed since it was read; otherwise the page re-reads and re-merges (up to 4 tries).
+- Re-renders after a sync wait until you leave a bet-slip box, so typing isn't interrupted.
+- Sign out keeps this device's data and stops syncing. Backup/Restore is unchanged.
+- Hidden on the Mac's file:// copy, since the emailed link can only open the shared site.
+
+**Tested** headless against a fake Supabase backend with two simulated devices: merging on first sign-in, cross-device add, delete carrying over while the other device edits at the same moment, reload with no extra writes, sign-out. Also tested the real supabase-js library loading and sending the sign-in email request, the expired-link message, and that the unconfigured build has no page errors and no sign-in button. Not yet tested against a real Supabase project.
