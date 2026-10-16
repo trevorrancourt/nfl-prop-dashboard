@@ -80,6 +80,7 @@ build goes on with the official report alone (cache "espn": false).
 
 import io
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -208,8 +209,9 @@ def fetch_espn_injuries():
     from team_mapping import FULL_TO_ABBR
     resp = requests.get(ESPN_URL, timeout=30)
     resp.raise_for_status()
+    data = resp.json()
     out = []
-    for team_block in resp.json().get("injuries", []):
+    for team_block in data.get("injuries", []):
         team_full = team_block.get("displayName") or ""
         for item in team_block.get("injuries", []):
             ath = item.get("athlete") or {}
@@ -236,6 +238,11 @@ def fetch_espn_injuries():
                 "note": (item.get("shortComment") or "").strip()[:200] or None,
                 "date": item.get("date"),
             })
+    if not out:
+        blocks = data.get("injuries") or []
+        first = (blocks[0].get("injuries") or [None])[0] if blocks and isinstance(blocks[0], dict) else None
+        raise ValueError(f"no usable entries; top keys={list(data)[:10]}, blocks={len(blocks)}, "
+                         f"sample={json.dumps(first)[:600] if first else None}")
     return out
 
 
@@ -248,9 +255,22 @@ def recently_played(week):
             if any(g.get("week") in recent for g in p.get("recent_games", []))}
 
 
-def merge_espn(players, by_team, snap_shares, crosswalk, week, espn_entries):
+def gh_notice(title, lines):
+    """One GitHub Actions annotation (readable on the run page, and by Claude
+    through the API when the logs aren't), so the ESPN step can be checked
+    from outside. Plain print anywhere else."""
+    msg = "; ".join(str(x) for x in lines)[:3500]
+    if os.environ.get("GITHUB_ACTIONS"):
+        print(f"::notice title={title}::" + msg.replace("%", "%25").replace("\r", "").replace("\n", "%0A"))
+    else:
+        print(f"{title}: {msg}")
+
+
+def merge_espn(players, by_team, snap_shares, crosswalk, week, espn_entries, log=None):
     """Folds ESPN statuses into players/by_team in place (more severe wins).
-    Returns how many players ESPN added or upgraded."""
+    Returns how many players ESPN added or upgraded. `log` (a list) collects
+    why each ESPN entry was used or skipped."""
+    log = log if log is not None else []
     by_espn, by_name = {}, {}
     if crosswalk is not None:
         cw = crosswalk.dropna(subset=["gsis_id"])
@@ -265,6 +285,7 @@ def merge_espn(players, by_team, snap_shares, crosswalk, week, espn_entries):
     for e in espn_entries:
         info = by_espn.get(e["espn_id"]) or by_name.get((norm_name(e["name"]), e["team"]))
         if not info or not e["team"]:
+            log.append(f"unmatched {e['name']} {e['team']} {e['status']}")
             continue
         gsis = info["gsis_id"]
         sev = STATUS_SEVERITY[e["status"]]
@@ -273,6 +294,7 @@ def merge_espn(players, by_team, snap_shares, crosswalk, week, espn_entries):
             continue  # the official report already says this or worse
         if not cur and gsis not in played:
             continue  # out for a while already -- not a new absence
+        log.append(f"{e['name']} {e['team']}: {(cur or {}).get('status', 'none')} -> {e['status']}")
         players[gsis] = {
             "status": e["status"], "source": "espn",
             "primary_injury": e["injury"] or (cur or {}).get("primary_injury"),
@@ -381,11 +403,16 @@ def main():
     espn_ok, espn_changed = False, 0
     try:
         print(f"Downloading ESPN injury news ({ESPN_URL}) ...")
-        espn_changed = merge_espn(players, by_team, snap_shares, crosswalk, week, fetch_espn_injuries())
+        entries = fetch_espn_injuries()
+        log = []
+        espn_changed = merge_espn(players, by_team, snap_shares, crosswalk, week, entries, log)
         espn_ok = True
-        print(f"  ESPN added or upgraded {espn_changed} player(s).")
+        from collections import Counter
+        counts = Counter(e["status"] for e in entries)
+        gh_notice("ESPN injuries", [f"read {len(entries)} ESPN entries {dict(counts)}", f"changed {espn_changed}"] + log[:40])
     except Exception as e:
         print(f"WARNING: ESPN injury feed unavailable ({e}); using the official report only.", file=sys.stderr)
+        gh_notice("ESPN injuries FAILED", [repr(e)[:500]])
 
     for entries in by_team.values():
         entries.sort(key=lambda e: (-e["severity"], -(e["snap_pct"] or 0)))
