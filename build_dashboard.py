@@ -3728,7 +3728,13 @@ function openPlayerModal(playerName) {{
     for (const r of playerRows) {{
       const a = r.def_avg_allowed;
       const line = (r.best_line !== null && r.best_line !== undefined) ? r.best_line : r.vegas_line;
+      // His share of his team's production at this position/stat (Team
+      // Share column) and the projection: share x what they allow
+      // (Anticipated column). Added 2026-10-16 per Trevor.
+      const sh = r.share, proj = r.anticipated;
+      const shareTip = `${{r.player}} gets ${{sh}}% of ${{r.team}}'s ${{r.position}} ${{r.stat_label}} (selected weeks). Projection = that share x the ${{fmt(a === null || a === undefined ? null : Math.round(a * 10) / 10)}} ${{first.opponent}} allows to ${{r.position}}s per game.`;
       up += `<td>${{fmt(a === null || a === undefined ? null : Math.round(a * 10) / 10)}}${{oppRankChip(r, first.opponent)}}`
+        + (sh !== null && sh !== undefined ? `<div style="font-size:11px;" title="${{escapeHtml(shareTip)}}"><span class="muted">${{sh}}% share &middot; proj</span> <strong>${{proj === null || proj === undefined ? '-' : Math.round(proj * 10) / 10}}</strong></div>` : '')
         + (line !== null && line !== undefined ? `<div class="muted" style="font-size:11px;">line ${{line}}</div>` : '') + `</td>`;
     }}
     gameRowsHtml += `<tr class="upcoming-row">${{up}}</tr>`;
