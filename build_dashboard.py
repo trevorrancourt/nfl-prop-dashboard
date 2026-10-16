@@ -1974,7 +1974,8 @@ function openMyBetsModal() {{
       `<select class="bet-field" data-field="side">${{resOpt(b.side, '', 'O/U')}}${{resOpt(b.side, 'over', 'Over')}}${{resOpt(b.side, 'under', 'Under')}}</select>`;
     const lineIn = x.manual ? '<span class="muted">-</span>' :
       `<input class="bet-field bet-line${{validBetLine(b.line) ? '' : ' bet-bad'}}" data-field="line" inputmode="decimal" value="${{escapeHtml(b.line || '')}}" placeholder="line">`;
-    const weekIn = x.manual ? `<input class="bet-field bet-week" data-field="week" inputmode="numeric" value="${{escapeHtml(b.week || '')}}" placeholder="wk" title="Week">` : '';
+    // Parlays take their week from their legs, so no week box (2026-10-16, per Trevor).
+    const weekIn = (x.manual && !b.legs) ? `<input class="bet-field bet-week" data-field="week" inputmode="numeric" value="${{escapeHtml(b.week || '')}}" placeholder="wk" title="Week">` : '';
     const sugHtml = sug ? `<span class="bet-sug bet-sug-${{sug}}" title="From the stat line vs your side/line -- a hint, not auto-filled">${{sug === 'win' ? 'looks W' : sug === 'loss' ? 'looks L' : 'looks push'}}</span>` : '';
     const pr = betProfit(b);
     rowsHtml += `<tr data-bet-key="${{escapeHtml(x.key)}}" class="bet-row bet-res-${{b.result || 'pending'}}">
