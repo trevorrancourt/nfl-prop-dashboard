@@ -66,7 +66,9 @@ def account_marks():
     if not key or not email:
         print("SUPABASE_SERVICE_KEY / ALERT_EMAIL not set -- skipping the Watching section.")
         return None
-    h = {"apikey": key, "Authorization": f"Bearer {key}"}
+    h = {"apikey": key}
+    if key.startswith("eyJ"):  # legacy service_role JWT; new sb_secret_ keys go in apikey only
+        h["Authorization"] = f"Bearer {key}"
     try:
         uid = None
         for page in range(1, 11):
