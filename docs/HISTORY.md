@@ -3249,3 +3249,4 @@ Trevor: "jeremiyah love is out this week and tyler allgeier is a must bet under"
 ## Filter checkboxes survive reload (2026-10-16)
 
 Trevor: "whenever i reload the page, hide x rows is checked but the x still show up". The browser restored the checkbox tick on reload while `hideMarkedX` (and the other filter variables) started false. Now Hide ❌, Hide ❓, Ladder only, Weak matchup only and Strong matchup only are saved in localStorage (`nfl_prop_dashboard_filters_v1`) and synced from the box before the first render. Tested headlessly: tick → reload keeps rows hidden; untick → reload shows them.
+- Then, per Trevor ("i want it to load with hide rows checked"): Hide ❌ rows now starts ticked on every page load (`checked` attribute, `hideMarkedX = true`, and `restoreFilterBoxes` forces it on instead of using the saved value). Unticking still works until the next reload. The other filter boxes keep their remembered state.

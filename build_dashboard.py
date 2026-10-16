@@ -912,7 +912,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <div class="controls">
     <span class="muted" id="pickyLabel"></span>
     <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;">
-      <input type="checkbox" id="hideMarkedX"> Hide &#10060; rows
+      <input type="checkbox" id="hideMarkedX" checked> Hide &#10060; rows
     </label>
     <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="Hide the &#10067; 'worth a look' rows -- Edge and Anc. Edge didn't agree, and in the Week 3 backtest they went 61-83 as a group.">
       <input type="checkbox" id="hideReview"> Hide &#10067; rows
@@ -993,7 +993,7 @@ const TOTAL_WEEKS = 18;
 let activePos = "ALL";
 let activeStat = "ALL";
 let activeGame = "ALL";
-let hideMarkedX = false;
+let hideMarkedX = true; // starts ticked on every load (2026-10-16, per Trevor)
 let hideReview = false;
 let ladderOnly = false;
 let weakMatchupOnly = false;
@@ -4054,7 +4054,8 @@ function saveFilterBoxes() {{
   for (const [id, set] of Object.entries(FILTER_BOXES)) {{
     const el = document.getElementById(id);
     if (!el) continue;
-    if (typeof saved[id] === 'boolean') el.checked = saved[id];
+    if (id === 'hideMarkedX') el.checked = true; // always loads ticked, per Trevor: "i want it to load with hide rows checked"
+    else if (typeof saved[id] === 'boolean') el.checked = saved[id];
     set(el.checked); // whatever the box shows is what the table uses
     el.addEventListener('change', saveFilterBoxes);
   }}
