@@ -69,6 +69,8 @@ jobs:
       - name: Phone alert (only if the NTFY_TOPIC secret is set)
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
           PAGE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: |
           if [ -n "$NTFY_TOPIC" ]; then

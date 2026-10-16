@@ -31,7 +31,11 @@ Read this first in every session. The full build history (every version, decisio
 
 The two boards link to each other.
 
-**Phone alerts:** `scripts/check_must_bets.py` reads a built page headlessly (Playwright) and lists MUST BET / 3-star rows. `scripts/notify.py` pushes new ones to ntfy, but only when the `NTFY_TOPIC` secret is set.
+**Phone alerts:** `scripts/check_must_bets.py` reads a built page headlessly (Playwright) and lists MUST BET / 3-star rows, plus (with `--watch-file`) the current best line/price of given mark keys. `scripts/notify.py` sends one ntfy push when the `NTFY_TOPIC` secret is set, with two sections (2026-10-16, per Trevor):
+- **NEW:** picks never sent before and not already marked by him.
+- **WATCHING:** every 🌕 row on this week's board, with its line/price and the move since alerts first saw it watched.
+
+It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of price, measured from the last alert). The watch list is read from his Supabase account using the `SUPABASE_SERVICE_KEY` and `ALERT_EMAIL` secrets, which go in Actions secrets only, never in the page. Without them, the WATCHING section is skipped.
 
 ## Editing `build_dashboard.py`: gotchas that have bitten before
 - `HTML_TEMPLATE` goes through `.format()`, so every JS/CSS brace must be doubled: `{{ }}`. Template literals become `${{x}}`.

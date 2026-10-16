@@ -3137,3 +3137,15 @@ Trevor chose GitHub Pages (public link), with a refresh every 3 hours from 8am t
 ## Default weeks = Last 4 (2026-10-16)
 
 Trevor: "make it so that the default view is last 4 games not all games ... and make that what the notifications send". `selectedWeeks` now starts as `lastNWeeks(DEFAULT_LAST_WEEKS)` (4) instead of every played week. `check_must_bets.py` / `notify.py` read the page's default `selectedWeeks`, so alerts follow it with no change of their own. "All played" is still one click away. MUST BET's 4-game minimum was not changed: a player or defense with a bye (or a missed game) in the 4-week window has 3 games and can reach 3-star at most.
+
+## Alerts: NEW + WATCHING sections (2026-10-16)
+
+Trevor: "a NEW section and then a watching section ... new should be something I haven't seen yet. Watching should take anything I have listed that way and just show me the list and if the odds moved".
+
+- `check_must_bets.py --watch-file keys.json` also returns each listed mark key on the board, with the side the page leans (`cons.side` or `direction`) and `bestMarketFor()` line/price/book. Picks now carry `key` (`markKey`).
+- `notify.py` sends one push:
+  - **NEW:** not sent before, and not marked bet/watch/pass in his account.
+  - **WATCHING:** all 🌕 rows on the current board(s), moved rows first, "moved from X" measured against the line when alerts first saw the row on the watch list (`watch_base`).
+- It buzzes only on a NEW pick or a watched move since the last alert (`watch_last`): any line change, or price ≥10 cents (`PRICE_MOVE_CENTS`). Small wiggles stay quiet and add up until they cross that.
+- The watch list comes from Supabase via the admin API (look up the user by `ALERT_EMAIL`, read `user_state.marks`) with the `SUPABASE_SERVICE_KEY` Actions secret. Without it, the WATCHING section is skipped and NEW works as before.
+- Tested with simulated refreshes: marked pick excluded, 5-cent wiggle quiet, line move buzzes, repeat quiet, no-account fallback.
