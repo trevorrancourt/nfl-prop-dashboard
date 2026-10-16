@@ -27,6 +27,7 @@ WEEKLY_STATS_URL = "https://github.com/nflverse/nflverse-data/releases/download/
 # Used only to backfill zero-stat weeks (see backfill_zero_stat_weeks below) --
 # added 2026-09-24 after Trevor caught a player's Week 1 missing from his
 # game-by-game box score even though he'd actually played that week.
+ROSTERS_URL = "https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_{season}.csv"
 SNAP_COUNTS_URL = "https://github.com/nflverse/nflverse-data/releases/download/snap_counts/snap_counts_{season}.csv"
 PLAYER_IDS_URL = "https://github.com/nflverse/nflverse-data/releases/download/players/players.csv"
 
@@ -285,6 +286,75 @@ def compute_recent_player_stats(weekly_df):
     return players
 
 
+def detect_trades(players, season, schedule, week):
+    """Players whose current roster team differs from the team they last
+    played for (added 2026-10-16, per Trevor: Marvin Harrison Jr. went from
+    ARI to HOU, so both teams' receivers are "in line for more/less work"
+    and shouldn't be MUST BETs). nflverse's season roster file lists each
+    player's latest team, which updates before he plays for the new club.
+
+    Moves each traded player's "team" to his new club (so his rows show this
+    week's real opponent) and returns
+    [{player_id, name, position, from, to, last_week, from_games_since,
+    to_games_since}] where *_games_since counts each team's finished games
+    after his last game for the old one -- except to_games_since, which counts
+    the games HE has played for the new team (a team's game he sat out
+    doesn't settle anything; to_team_games_since is the team's own count).
+    A player who already played for the new team is caught too, from the
+    team change inside his own game log. Optional: returns [] if the roster
+    download fails (then only game-log team changes are found)."""
+    current = {}
+    try:
+        roster = fetch_csv(ROSTERS_URL.format(season=season))
+        roster = roster.dropna(subset=["gsis_id", "team"])
+        if "week" in roster.columns:
+            roster = roster.sort_values("week").drop_duplicates("gsis_id", keep="last")
+        current = dict(zip(roster["gsis_id"].astype(str), roster["team"].astype(str)))
+    except Exception as e:
+        print(f"  (roster data unavailable, using game logs only: {e})")
+    done = schedule[(schedule["week"] < week) & schedule["home_score"].notna()]
+
+    def games_after(team, wk):
+        g = done[(done["week"] > wk) & ((done["home_team"] == team) | (done["away_team"] == team))]
+        return int(len(g))
+
+    trades = []
+    for pid, info in players.items():
+        games = info["recent_games"]  # newest first
+        if not games:
+            continue
+        new_team = current.get(pid) or info["team"]
+        before = [g for g in games if g["team"] != new_team]
+        if not before:
+            continue  # every game this season was for his current team
+        old_team = before[0]["team"]  # the club he most recently played for before this one
+        last_week = before[0]["week"]
+        trades.append({
+            "player_id": pid,
+            "name": info["name"],
+            "position": info["position"],
+            "from": old_team,
+            "to": new_team,
+            "last_week": last_week,
+            "from_games_since": games_after(old_team, last_week),
+            # Games HE has played for the new team (a game he sat out
+            # settles nothing), and how many the new team has played since.
+            "to_games_since": sum(1 for g in games if g["team"] == new_team and g["week"] > last_week),
+            "to_team_games_since": games_after(new_team, last_week),
+            # His per-game role with the old team, so the dashboard can skip
+            # depth players whose move changes nobody's workload.
+            "old_role": {k: round(sum(g.get(k, 0) for g in before if g["team"] == old_team)
+                                  / max(1, sum(1 for g in before if g["team"] == old_team)), 1)
+                         for k in ("targets", "carries", "passing_yards")},
+        })
+        info["team"] = new_team
+        info["traded_from"] = old_team
+    for t in trades:
+        print(f"  Team change: {t['name']} ({t['position']}) {t['from']} -> {t['to']} "
+              f"after Week {t['last_week']} ({t['to_games_since']} game(s) since for {t['to']})")
+    return trades
+
+
 def compute_defense_allowed(weekly_df):
     """
     For each team and position, a most-recent-first list of what that team
@@ -468,6 +538,9 @@ def main():
     print("Computing recent player averages...")
     players = compute_recent_player_stats(weekly)
 
+    print("Checking rosters for traded players...")
+    trades = detect_trades(players, season, schedule, week)
+
     print("Computing defense allowed by position...")
     # weekly is already current-season-only. Early in the season this can
     # still be a small, noisy sample (as few as 1-2 games per team) -- that's
@@ -501,6 +574,7 @@ def main():
         "team_results": team_results,
         "prev_week_open": prev_week_open,
         "players": players,
+        "trades": trades,
         "defense_allowed": defense,
         "defense_allowed_games": defense_games,
         "team_position_totals": team_totals,

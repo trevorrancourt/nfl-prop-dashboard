@@ -45,6 +45,7 @@ JS = r"""
         price: m ? fmtP(m.price) : '', book: m ? m.book : '',
         hit: cn.pGames ? `${cn.pHits}/${cn.pGames}` : '', oppHit: cn.dGames ? `${cn.dHits}/${cn.dGames}` : '',
         oppRank: x.def_rank, injury: x.injury ? x.injury.status : null,
+        roleChange: x.role_changes || [],
       };
     }),
     watched: rows.filter(x => watch.has(markKey(x))).map(x => {

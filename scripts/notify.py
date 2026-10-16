@@ -143,8 +143,22 @@ def cents(p):
 def pick_line(p):
     icon = {"MUST BET": "⭐", "3 fire": "🔥", "3 ice": "🧊"}.get(p["tier"], "")
     price = f" {p['price']} {p['book']}".rstrip() if p.get("price") else ""
+    warn = " · ⚠️ role change" if p.get("roleChange") else ""
     return (f"{icon} {p['player']} ({p['team']} {p['opp']}) {p['stat']} "
-            f"{p['side'].upper()} {p['line']}{price} · Hit {p['hit']} · Opp {p['oppHit']}")
+            f"{p['side'].upper()} {p['line']}{price} · Hit {p['hit']} · Opp {p['oppHit']}{warn}")
+
+
+def apply_own_flags(picks, marks):
+    """This person's own ⚠️ role-change flags (set in the player popup) keep
+    that player out of MUST BET for them, same as on their board."""
+    out = []
+    for p in picks:
+        parts = (p.get("key") or "").split("|")
+        if p["tier"] == "MUST BET" and len(parts) >= 3 and (marks or {}).get("role|" + "|".join(parts[:3])) == "flux":
+            p = dict(p, tier="3 fire" if p["side"] == "over" else "3 ice",
+                     roleChange=(p.get("roleChange") or []) + ["you flagged a role change this week"])
+        out.append(p)
+    return out
 
 
 def watch_line(w, base):
@@ -182,6 +196,7 @@ def alert_for(rec, picks, watched_all, week, st):
     """This person's notification payload (or None). Updates their state `st`;
     the returned commit() marks everything as sent, once the push went out."""
     marks = rec["marks"]
+    picks = apply_own_flags(picks, marks)
     sent = set(st.get("sent", []))
     watch_keys = {k for k, v in (marks or {}).items() if v == "watch"}
     # Forget rows they stopped watching, so re-watching starts fresh.

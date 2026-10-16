@@ -71,6 +71,10 @@ It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of
   - A player's miss doesn't count against a top-5 tough defense.
   - A defense's miss doesn't count against an offense whose usual output is under 0.75× the line.
   - The adjusted rate applies only if enough games remain.
+- **Role changes block MUST BET** (2026-10-16, per Trevor: "lines that are a result of injuries, trade, personnel issues"). Such a row is held at 3 with a ⚠️ tag; alerts send it as a 3-star with "⚠️ role change". Three sources:
+  - **Trade:** the nflverse roster says a player's team changed (`fetch_stats.detect_trades`). It flags him plus same-group teammates on both teams (`TRADE_ROLE_GROUPS`) until 2 games after (`TRADE_SETTLE_GAMES`). The new-team side counts his own games, or ends after 4 team games if he never plays. Only players with a real role count (`trade_had_role`: WR/TE 3+ targets/g, RB 6+ touches/g, QB 100+ pass yds/g). A traded player's rows use his new team and opponent.
+  - **Injury:** a strong own-team 🩹 entry, i.e. a QB/RB/WR/TE with 50%+ snaps listed Out/Doubtful.
+  - **Manual:** "⚠️ Flag role change" in the player popup (`MARKS['role|WEEK|player|team'] = 'flux'`, synced). notify.py applies each person's own flags.
 - **Weeks filter:** defaults to the last 4 played weeks (`DEFAULT_LAST_WEEKS`, changed 2026-10-16 per Trevor; was 1..WEEK-1). Phone alerts use the same default. Last 2 / Last 4 / All played buttons. Signals follow the selected weeks; MUST BET always needs 4+ games.
 - **Context only, not picks:** game script panel/popup (🎬), Second-look checklist, ladder 🪜, injury impact 🩹. In backtests only game script beat a coin flip (58%), on a small sample. Be honest about small samples; the consistency theory is not proven yet.
 

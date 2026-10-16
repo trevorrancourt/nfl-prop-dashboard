@@ -3167,3 +3167,18 @@ Trevor: "can i put a button in the dashboard to refresh the lines also?", then "
 - New Supabase Edge Function `supabase/functions/refresh-lines/index.ts`. It verifies the caller's Supabase session and email, reads the latest `update.yml` run (GET), or dispatches one on `main` (POST, refused while a run is queued or in progress). CORS is limited to trevorrancourt.github.io. Secrets: `GH_TOKEN`, `ALLOWED_EMAILS`.
 - Page: `#refreshCtl` in the signed-in control, showing "🔄 Refresh lines" and "Lines Xm old". While a refresh runs it polls every 20 s, then shows "✅ New lines ready · Reload" or a failure note, with a 15-minute timeout. Hidden when the function is missing or the user isn't allowed. `ODDS_TIME_UTC` is the odds pull time converted to UTC at build time (`odds_time_utc()`).
 - Tested headlessly against a simulated function: not deployed or not allowed → hidden; already running → follows it; tap → running → done → reload; refused POST → message. Sync tests still pass. The function itself was not run here (no Deno/Supabase access from the cloud session).
+
+## Role changes block MUST BET (2026-10-16)
+
+Trevor: "tre tucker is a perfect must bet this week ... xavier hutchinson and jalen brooks shouldn't be though. they are both a part of a trade ... marvin harrison jr was traded from cardinals to texans ... i don't want that variability in must bets ... like lines that are a result of injuries, trade, personnel issues". He picked: cap at 3-star + ⚠️ tag, a 2-game window after a trade, and a manual flag too.
+
+- **Trades:** `fetch_stats.detect_trades()` compares nflverse's season roster (`rosters/roster_{season}.csv`, latest team per gsis_id) with each player's game log. The roster already showed MHJ on HOU while all his games were for ARI.
+  - The traded player's `team` moves to the new club, so his rows show this week's real opponent (previously they'd have shown ARI's).
+  - Each trade records `from_games_since` (old team's games after his last one), `to_games_since` (his own games for the new team), `to_team_games_since`, and `old_role` (per-game targets/carries/pass yds with the old team).
+  - `compute_trade_flags()` flags him plus `TRADE_ROLE_GROUPS` teammates (WR/TE→WR+TE, RB→RB, QB→QB+WR+TE) on each side until that side reaches `TRADE_SETTLE_GAMES` = 2. A no-show stops flagging after `TRADE_MAX_WAIT_GAMES` = 4 team games.
+  - `trade_had_role()` skips depth players (WR/TE <3 targets/g, RB <6 touches/g, QB <100 pass yds/g). Without that, Xavier Smith's move (0.3 targets/g) flagged Kittle, Evans and every other SF receiver.
+  - The local test build found 5 team changes this season; only MHJ cleared the role bar, so only ARI and HOU WR/TE rows were flagged.
+- **Injuries:** `roleChangeReasons()` adds strong own-team 🩹 entries (QB/RB/WR/TE, severity ≥3 = Out/Doubtful, 50%+ snaps). There were none in the local data yet (Friday designations), so this was tested with a simulated injury.
+- **Manual:** the player popup has "⚠️ Flag role change" (undo), stored as `MARKS['role|WEEK|player|team'] = 'flux'`, so it syncs. notify.py's `apply_own_flags()` applies each person's own flags to their alert.
+- **Effect:** in `enrichRow`, a level 4 with any role change becomes 3 (`role_capped`). `roleTag()` adds ⚠️ with the reasons to any signalled row. check_must_bets passes `roleChange`, and alert lines get "· ⚠️ role change".
+- **Tested:** with every line forced to 0.5 there were 167 MUST BETs and 0 with a role change; 16 rows were held at 3 with the tag; the simulated injury capped its row; the manual flag on/off removed and restored the MUST BET and saved the mark; alert flags only affect their owner. Sync and multi-person alert tests still pass.

@@ -259,6 +259,64 @@ IMPACT_RULES = {
 }
 
 
+# Role changes (added 2026-10-16, per Trevor: "xavier hutchinson and jalen
+# brooks shouldn't be [MUST BETs] ... they are both a part of a trade ... i
+# don't want that variability in must bets"). A team change (trade or
+# signing, see fetch_stats.detect_trades) flags the player himself and his
+# teammates in TRADE_ROLE_GROUPS on BOTH teams until that team has played
+# TRADE_SETTLE_GAMES games since. Flagged rows can't be MUST BET (capped at
+# 3, with a ⚠️ tag); the JS adds key-teammate injuries and Trevor's own
+# manual ⚠️ flags to the same list.
+TRADE_SETTLE_GAMES = 2
+# A player who joins a team but doesn't suit up (hurt, inactive) stops
+# flagging his new teammates once that team has played this many games.
+TRADE_MAX_WAIT_GAMES = 4
+# Only a player with a real role moves anyone else's workload: per game with
+# his old team, WR/TE 3+ targets, RB 6+ carries+targets, QB 100+ passing
+# yards. A depth player under these still flags only himself.
+def trade_had_role(t):
+    r = t.get("old_role") or {}
+    pos = t["position"]
+    if pos in ("WR", "TE"):
+        return r.get("targets", 0) >= 3
+    if pos == "RB":
+        return r.get("carries", 0) + r.get("targets", 0) >= 6
+    if pos == "QB":
+        return r.get("passing_yards", 0) >= 100
+    return False
+TRADE_ROLE_GROUPS = {
+    "WR": {"WR", "TE"},
+    "TE": {"WR", "TE"},
+    "RB": {"RB"},
+    "QB": {"QB", "WR", "TE"},
+}
+
+
+def compute_trade_flags(player_id, pos, team, trades):
+    """Reasons (strings) this player's role may be changing because of a
+    recent team change, or [] if none."""
+    out = []
+    for t in trades or []:
+        t = dict(t)
+        if t.get("to_team_games_since", 0) >= TRADE_MAX_WAIT_GAMES:
+            t["to_games_since"] = max(t["to_games_since"], TRADE_SETTLE_GAMES)
+        if t["player_id"] == player_id:
+            if t["to_games_since"] < TRADE_SETTLE_GAMES:
+                n = t["to_games_since"]
+                out.append(f"joined {t['to']} from {t['from']} after Week {t['last_week']} "
+                           f"({n} game{'s' if n != 1 else ''} with them so far)")
+            continue
+        if pos not in TRADE_ROLE_GROUPS.get(t["position"], set()) or not trade_had_role(t):
+            continue
+        for side, verb in (("from", "left"), ("to", "joined")):
+            if team == t[side] and t[side + "_games_since"] < TRADE_SETTLE_GAMES:
+                n = t[side + "_games_since"]
+                since = (f"he's played {n} game{'s' if n != 1 else ''} for them" if side == "to"
+                         else f"{n} game{'s' if n != 1 else ''} since")
+                out.append(f"{t['name']} ({t['position']}) {verb} {team} after Week {t['last_week']} ({since})")
+    return out
+
+
 def compute_injury_impacts(pos, stat_col, player_id, team, opponent, injuries_by_team):
     """{"helps": [...], "hurts": [...]} for one stat row, or None if
     nothing applies. Each entry names the injured player, his team,
@@ -561,6 +619,7 @@ def build_rows(stats, odds_lookup, weather, injuries, injuries_by_team):
                     "injury_impacts": compute_injury_impacts(
                         pos, stat_col, player_id, info["team"], opp, injuries_by_team
                     ),
+                    "trade_flags": compute_trade_flags(player_id, pos, info["team"], stats.get("trades")),
                 }
             )
     return rows
@@ -2200,12 +2259,39 @@ function weatherClass(r) {{
 // (MUST_BET_EDGE_PCT) is FIXED, not part of EDGE_TIERS and not affected
 // by the "How picky" slider -- see the comment above MUST_BET_EDGE_PCT's
 // declaration for why.
+// Role changes (added 2026-10-16, see TRADE_ROLE_GROUPS in the builder):
+// a recent trade (server-side trade_flags), a key own-team skill player
+// Out/Doubtful (the strong 🩹 entries), or Trevor's own ⚠️ flag from the
+// player popup (MARKS 'role|WEEK|player|team' = 'flux', synced like marks).
+// Any of these keeps a row from being a MUST BET (held at 3).
+const ROLE_INJURY_POSITIONS = new Set(['QB', 'RB', 'HB', 'FB', 'WR', 'TE']);
+function roleKey(r) {{ return 'role|' + WEEK + '|' + r.player + '|' + r.team; }}
+function roleChangeReasons(r) {{
+  const out = (r.trade_flags || []).slice();
+  const imp = r.injury_impacts;
+  if (imp) {{
+    const seen = new Set();
+    for (const e of [].concat(imp.helps || [], imp.hurts || [])) {{
+      if (e.team !== r.team || e.severity < 3 || !ROLE_INJURY_POSITIONS.has(e.position) || seen.has(e.name)) continue;
+      seen.add(e.name);
+      out.push(`${{e.name}} (${{e.position}}) is ${{e.status}}: ${{e.reason}}`);
+    }}
+  }}
+  if (MARKS[roleKey(r)] === 'flux') out.push('you flagged a role change this week');
+  return out;
+}}
+function roleTag(r) {{
+  if (!r.role_changes || !r.role_changes.length) return '';
+  const head = r.role_capped ? 'Held at 3 instead of MUST BET -- role change:' : 'Role change:';
+  return ` <span class="cov-tag impact-hurt" style="margin-left:3px" title="${{escapeHtml(head + '\\n- ' + r.role_changes.join('\\n- '))}}">&#9888;&#65039;</span>`;
+}}
+
 function tierEmojiSpan(emo, r) {{
   const parts = [];
   if (SIGNAL_MODE === 'consistency' && r.cons) parts.push(`He cleared ${{r.cons.side}} ${{r.cons.line}} in ${{fmtHit(r.cons.pHits, r.cons.pGames)}} games; ${{r.opponent}} allowed it in ${{fmtHit(r.cons.dHits, r.cons.dGames)}}`);
   else if (r.tier_rel_sd !== null && r.tier_rel_sd !== undefined) parts.push(`Consistency: games swing ${{Math.round(r.tier_sd * 10) / 10}} (${{Math.round(r.tier_rel_sd * 100)}}% of the line; 3+ needs ${{Math.round(MAX_TIER3_REL_SD * 100)}}% or less)`);
   if (r.tier_cap_reason) parts.push(`Held at 2 instead of 3 -- ${{r.tier_cap_reason}}`);
-  return parts.length ? `<span title="${{escapeHtml(parts.join('\\n'))}}">${{emo}}${{r.tier_cap_reason ? '<sup class="muted" style="font-size:9px;">&#8595;</sup>' : ''}}</span>` : emo;
+  return (parts.length ? `<span title="${{escapeHtml(parts.join('\\n'))}}">${{emo}}${{r.tier_cap_reason ? '<sup class="muted" style="font-size:9px;">&#8595;</sup>' : ''}}</span>` : emo) + roleTag(r);
 }}
 
 function signalEmoji(r) {{
@@ -3188,6 +3274,13 @@ function enrichRow(r, weeks, defCache) {{
   // price, so it's still slightly more interesting than a row with
   // nothing going on. Ties within a tier (e.g. two different MUST BET
   // rows) keep whatever order they were in before sorting.
+  const roleChanges = roleChangeReasons(r);
+  let roleCapped = false;
+  if (roleChanges.length && (hotLevel === 4 || coldLevel === 4)) {{
+    if (hotLevel === 4) hotLevel = 3; else coldLevel = 3;
+    roleCapped = true;
+  }}
+
   let signalRank = 0;
   if (hotLevel === 4 || coldLevel === 4) signalRank = 7;
   else if (hotLevel === 3 || coldLevel === 3) signalRank = 6;
@@ -3234,6 +3327,8 @@ function enrichRow(r, weeks, defCache) {{
     def_hit_pct: cons && cons.dGames ? cons.dRate : null,
     tiebreak: tb,
     suppressed_by: suppressedBy,
+    role_changes: roleChanges,
+    role_capped: roleCapped,
   }});
 }}
 
@@ -3408,6 +3503,10 @@ function openPlayerModal(playerName) {{
     const injSrc = inj.source === 'practice' ? '(NFL practice report -- no game designation yet)' : '(NFL official injury report)';
     metaParts.push('&#9937;&#65039; <span class="' + injClass + '">' + escapeHtml(injParts.join(' ')) + '</span> ' + injSrc);
   }}
+  const roleReasons = first.role_changes || [];
+  const flagged = MARKS[roleKey(first)] === 'flux';
+  metaParts.push((roleReasons.length ? '<span class="weather-bad" title="' + escapeHtml(roleReasons.join('\\n')) + '">&#9888;&#65039; Role change: ' + escapeHtml(roleReasons.join('; ')) + '</span> ' : '')
+    + `<button type="button" class="weeks-mini-btn" id="roleFlagBtn" data-role-key="${{escapeHtml(roleKey(first))}}" title="For news the data can't see (coach comments, depth chart, a teammate returning). Keeps this player out of MUST BET this week, on your board and in your alerts.">${{flagged ? '&#9888;&#65039; Flagged: role change (undo)' : '&#9888;&#65039; Flag role change'}}</button>`);
   document.getElementById('modalMeta').innerHTML = metaParts.join('  &middot;  ');
 
   // Injury impact section: every impactful injury touching any of this
@@ -4564,6 +4663,16 @@ function initColumns() {{
 }}
 
 initColumns();
+document.addEventListener('click', (e) => {{
+  const b = e.target.closest && e.target.closest('#roleFlagBtn');
+  if (!b) return;
+  const k = b.dataset.roleKey;
+  if (MARKS[k] === 'flux') delete MARKS[k]; else MARKS[k] = 'flux';
+  saveMarks();
+  render();
+  if (currentModalPlayer) openPlayerModal(currentModalPlayer);
+}});
+
 render();
 initSync();
 </script>
