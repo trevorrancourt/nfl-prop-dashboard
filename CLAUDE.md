@@ -35,7 +35,20 @@ The two boards link to each other.
 - **NEW:** picks never sent before and not already marked by him.
 - **WATCHING:** every 🌕 row on this week's board, with its line/price and the move since alerts first saw it watched.
 
-It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of price, measured from the last alert). The watch list is read from his Supabase account using the `SUPABASE_SERVICE_KEY` and `ALERT_EMAIL` secrets, which go in Actions secrets only, never in the page. Without them, the WATCHING section is skipped.
+It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of price, measured from the last alert).
+
+**Per person:** anyone signed in can save their own ntfy topic under "🔔 Alerts" next to Sign out, stored in `public.alert_prefs`. Each person gets their own alert from their own marks, with per-user state in `data/last_alert.json` → `users`. Trevor's `NTFY_TOPIC` secret maps to the `ALERT_EMAIL` account. Accounts are read with the `SUPABASE_SERVICE_KEY` secret, which goes in Actions secrets only, never in the page; without it, only `NTFY_TOPIC` gets alerts, NEW section only. The `alert_prefs` SQL:
+  ```sql
+  create table public.alert_prefs (
+    user_id uuid primary key references auth.users on delete cascade,
+    ntfy_topic text,
+    updated_at timestamptz not null default now()
+  );
+  alter table public.alert_prefs enable row level security;
+  create policy "read own"   on public.alert_prefs for select using (auth.uid() = user_id);
+  create policy "insert own" on public.alert_prefs for insert with check (auth.uid() = user_id);
+  create policy "update own" on public.alert_prefs for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  ```
 
 ## Editing `build_dashboard.py`: gotchas that have bitten before
 - `HTML_TEMPLATE` goes through `.format()`, so every JS/CSS brace must be doubled: `{{ }}`. Template literals become `${{x}}`.

@@ -1210,7 +1210,14 @@ function renderSyncCtl() {{
   if (!ctl) return;
   if (syncUser) {{
     ctl.innerHTML = `<span class="muted" title="Your marks and bets are saved to your account and show up on any device where you sign in.">&#9729;&#65039; ${{escapeHtml(syncUser.email || 'Signed in')}} &middot; <span id="syncStatus">${{syncStatusText()}}</span></span>
-      <button type="button" class="weeks-mini-btn" id="syncSignOut">Sign out</button>`;
+      <button type="button" class="weeks-mini-btn" id="alertsBtn" title="Get your own phone alerts: new MUST BET / 3-star picks, plus your Watching list when lines move.">&#128276; Alerts${{alertTopic ? ' on' : ''}}</button>
+      <button type="button" class="weeks-mini-btn" id="syncSignOut">Sign out</button>
+      <span id="alertsForm" style="display:none;">
+        <input type="text" id="alertsTopic" placeholder="ntfy topic" autocomplete="off" spellcheck="false" style="background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:13px; width:200px;">
+        <button type="button" class="weeks-mini-btn" id="alertsSave">Save</button>
+        <button type="button" class="weeks-mini-btn" id="alertsTest">Send test</button>
+        <span id="alertsMsg" class="muted"></span>
+      </span>`;
   }} else {{
     ctl.innerHTML = `<button type="button" class="pos-btn" id="syncSignInBtn" title="Sign in with your email to keep your marks and bets in sync across your phone, laptop, etc. Without signing in they stay in this browser only.">&#9729;&#65039; Sign in to sync</button>
       <span id="syncForm" style="display:none;">
@@ -1218,6 +1225,76 @@ function renderSyncCtl() {{
         <button type="button" class="weeks-mini-btn" id="syncSend">Email me a sign-in link</button>
       </span>
       <span id="syncStatus" class="muted">${{syncStatus === 'offline' ? syncStatusText() : ''}}</span>`;
+  }}
+}}
+
+// ---- Per-person phone alerts (added 2026-10-16, per Trevor: "i want the
+// others to get the alerts when they sign in"). Signed-in users pick their
+// own ntfy topic here; it's saved in public.alert_prefs (row-level security:
+// only you can read or change yours). scripts/notify.py then sends each
+// person their own NEW + WATCHING alert from their own marks.
+let alertTopic = null;      // saved topic, '' if none, null until loaded
+let alertsAvailable = true; // false if the alert_prefs table isn't set up
+function suggestTopic() {{
+  const abc = 'abcdefghijkmnpqrstuvwxyz23456789';
+  let s = 'nfl-props-';
+  for (let i = 0; i < 10; i++) s += abc[Math.floor(Math.random() * abc.length)];
+  return s;
+}}
+function validTopic(t) {{ return /^[-_A-Za-z0-9]{{1,64}}$/.test(t); }}
+async function loadAlertPrefs() {{
+  if (!sb || !syncUser) return;
+  const user = syncUser;
+  const res = await sb.from('alert_prefs').select('ntfy_topic').eq('user_id', user.id).maybeSingle();
+  if (syncUser !== user) return;
+  if (res.error) {{ alertsAvailable = false; alertTopic = ''; }}
+  else alertTopic = (res.data && res.data.ntfy_topic) || '';
+  renderAlertsBtn();
+}}
+function renderAlertsBtn() {{
+  const b = document.getElementById('alertsBtn');
+  if (b) b.innerHTML = '&#128276; Alerts' + (alertTopic ? ' on' : '');
+}}
+function openAlertsForm() {{
+  const f = document.getElementById('alertsForm');
+  if (!f) return;
+  if (f.style.display !== 'none') {{ f.style.display = 'none'; return; }}
+  f.style.display = '';
+  const msg = document.getElementById('alertsMsg');
+  if (!alertsAvailable) {{
+    f.innerHTML = '<span class="muted">Phone alerts aren&#39;t set up on this site yet.</span>';
+    return;
+  }}
+  const input = document.getElementById('alertsTopic');
+  input.value = alertTopic || suggestTopic();
+  msg.innerHTML = alertTopic
+    ? 'Alerts go to this ntfy topic. Clear it and Save to stop them.'
+    : 'Get the free <b>ntfy</b> app, tap + and subscribe to this topic name (or type your own), then Save. Anyone who knows the name can read it, so keep it hard to guess.';
+}}
+async function saveAlertTopic() {{
+  const input = document.getElementById('alertsTopic');
+  const msg = document.getElementById('alertsMsg');
+  const t = (input.value || '').trim();
+  if (t && !validTopic(t)) {{ msg.textContent = 'Use only letters, numbers, - and _ (up to 64).'; return; }}
+  if (!sb || !syncUser) return;
+  msg.textContent = 'Saving...';
+  const res = await sb.from('alert_prefs').upsert({{ user_id: syncUser.id, ntfy_topic: t || null, updated_at: new Date().toISOString() }});
+  if (res.error) {{ msg.textContent = "Couldn't save: " + res.error.message; return; }}
+  alertTopic = t;
+  renderAlertsBtn();
+  msg.textContent = t
+    ? 'Saved. You will get NEW picks and your Watching list after each refresh (about every 3 hours) when something changes.'
+    : 'Alerts turned off.';
+}}
+async function testAlert() {{
+  const t = (document.getElementById('alertsTopic').value || '').trim();
+  const msg = document.getElementById('alertsMsg');
+  if (!validTopic(t)) {{ msg.textContent = 'Type a topic first.'; return; }}
+  try {{
+    const r = await fetch('https://ntfy.sh/' + t, {{ method: 'POST', body: 'Test alert from the NFL prop dashboard. If you see this, you are subscribed.', headers: {{ Title: 'NFL props: test alert' }} }});
+    msg.textContent = r.ok ? 'Test sent. Check the ntfy app (it only shows up if you subscribed to this exact topic).' : 'Test failed (' + r.status + ').';
+  }} catch (e) {{
+    msg.textContent = "Couldn't reach ntfy.";
   }}
 }}
 
@@ -1242,8 +1319,10 @@ function onAuthChange(session) {{
   if ((u ? u.id : null) === (syncUser ? syncUser.id : null)) return;
   syncUser = u;
   syncStatus = '';
+  alertTopic = null;
+  alertsAvailable = true;
   renderSyncCtl();
-  if (u) setTimeout(() => syncNow(), 0); // not inside the auth callback (supabase-js can deadlock)
+  if (u) setTimeout(() => {{ syncNow(); loadAlertPrefs(); }}, 0); // not inside the auth callback (supabase-js can deadlock)
   if (myBetsOpen) openMyBetsModal();
 }}
 
@@ -1263,6 +1342,12 @@ function initSync() {{
       if (f.style.display === '') document.getElementById('syncEmail').focus();
     }} else if (t.id === 'syncSend') {{
       sendMagicLink();
+    }} else if (t.id === 'alertsBtn') {{
+      openAlertsForm();
+    }} else if (t.id === 'alertsSave') {{
+      saveAlertTopic();
+    }} else if (t.id === 'alertsTest') {{
+      testAlert();
     }} else if (t.id === 'syncSignOut') {{
       // Signing out keeps everything on this device; it just stops syncing.
       if (sb) sb.auth.signOut();
@@ -1270,6 +1355,7 @@ function initSync() {{
   }});
   ctl.addEventListener('keydown', e => {{
     if (e.key === 'Enter' && e.target.id === 'syncEmail') sendMagicLink();
+    if (e.key === 'Enter' && e.target.id === 'alertsTopic') saveAlertTopic();
   }});
   const s = document.createElement('script');
   s.src = SUPABASE_JS_URL;

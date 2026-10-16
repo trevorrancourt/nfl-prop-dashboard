@@ -3149,3 +3149,13 @@ Trevor: "a NEW section and then a watching section ... new should be something I
 - It buzzes only on a NEW pick or a watched move since the last alert (`watch_last`): any line change, or price ≥10 cents (`PRICE_MOVE_CENTS`). Small wiggles stay quiet and add up until they cross that.
 - The watch list comes from Supabase via the admin API (look up the user by `ALERT_EMAIL`, read `user_state.marks`) with the `SUPABASE_SERVICE_KEY` Actions secret. Without it, the WATCHING section is skipped and NEW works as before.
 - Tested with simulated refreshes: marked pick excluded, 5-cent wiggle quiet, line move buzzes, repeat quiet, no-account fallback.
+
+## Alerts for everyone who signs in (2026-10-16)
+
+Trevor: "i want the others to get the alerts when they sign in".
+
+- **Page:** signed in, a "🔔 Alerts" button next to Sign out opens a topic box, suggesting a random `nfl-props-xxxxxxxxxx` name, with Save and Send test. Send test posts straight to ntfy.sh from the browser. The topic is saved in a new `public.alert_prefs` table (RLS: own row only; SQL in CLAUDE.md). If the table is missing, the box says alerts aren't set up yet.
+- **notify.py:** recipients are everyone in `alert_prefs` with a topic, plus `NTFY_TOPIC` for the `ALERT_EMAIL` account (a topic saved on the site wins). Duplicate topics are only sent once. The board is checked once, with the union of everyone's watch keys, then each person gets their own NEW (never sent to them, not marked by them) and WATCHING. Per-user state lives in `last_alert.json` → `users`; the old single-user state carries over to Trevor.
+- **Workflow:** the alert step now runs if `NTFY_TOPIC` or `SUPABASE_SERVICE_KEY` is set.
+- **Tested:** simulated multi-person refreshes (a friend gets a pick Trevor was already sent; a friend's pass excluded; only the friend buzzed on their line move; old state carried over; duplicate topic deduped) and the Alerts box headlessly (suggest, validate, test send, save, load, clear, missing table). Two-device sync tests still pass.
+- ntfy.sh's free tier caps messages per day per sender IP (around 250), which is plenty for a handful of people at ≤5 refreshes a day.

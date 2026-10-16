@@ -66,18 +66,20 @@ jobs:
           fi
           touch site/.nojekyll
 
-      - name: Phone alert (only if the NTFY_TOPIC secret is set)
+      # Phone alerts: NTFY_TOPIC (owner) and/or everyone who saved a topic
+      # under "Alerts" on the site (needs SUPABASE_SERVICE_KEY).
+      - name: Phone alerts
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
           PAGE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: |
-          if [ -n "$NTFY_TOPIC" ]; then
+          if [ -n "$NTFY_TOPIC" ] || [ -n "$SUPABASE_SERVICE_KEY" ]; then
             pip install playwright==1.47.0 && python -m playwright install --with-deps chromium
             python scripts/notify.py site/index.html site/dashboard_mnf.html || echo "alert failed (site still updates)"
           else
-            echo "No NTFY_TOPIC secret -- skipping."
+            echo "No NTFY_TOPIC or SUPABASE_SERVICE_KEY secret -- skipping."
           fi
 
       - name: Save data for the next run

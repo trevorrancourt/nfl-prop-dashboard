@@ -1,28 +1,31 @@
 """
 Phone alerts for the hosted dashboard (added 2026-10-15; NEW / WATCHING
-sections added 2026-10-16).
+sections and per-person alerts added 2026-10-16).
 
 After each GitHub Actions refresh, reads the freshly built board(s) with
-check_must_bets.py and pushes one ntfy notification (https://ntfy.sh) with
-two sections:
+check_must_bets.py and pushes one ntfy notification (https://ntfy.sh) per
+person, with two sections:
 
-  NEW       MUST BETs and 3-star picks you haven't seen yet: never sent
-            before, and not already marked by you (bet / watching / pass).
-  WATCHING  Every row you've marked 🌕 Watching that's on this week's board,
+  NEW       MUST BETs and 3-star picks that person hasn't seen yet: never
+            sent to them before, and not already marked by them (bet /
+            watching / pass).
+  WATCHING  Every row they've marked 🌕 Watching that's on this week's board,
             with its current best line/price and how it moved since the
-            alerts first saw it on your watch list.
+            alerts first saw it on their watch list.
 
-It only buzzes when something changed: a NEW pick, or a watched line moving
-(any line change, or the price moving 10+ cents). Otherwise it stays quiet.
-State lives in data/last_alert.json (kept between runs by the workflow cache).
+It only buzzes someone when something changed for them: a NEW pick, or one
+of their watched lines moving (any line change, or the price moving 10+
+cents). State lives in data/last_alert.json (kept by the workflow cache).
 
-Your watch list comes from your dashboard account (Supabase), which needs
-two more secrets: SUPABASE_SERVICE_KEY (Supabase > Project Settings > API >
-service_role / secret key; never put it in the page) and ALERT_EMAIL (the
-email you sign in with). Without them the WATCHING section is skipped and
-NEW works as before (minus the "already marked" filter).
-
-Does nothing unless the NTFY_TOPIC secret is set.
+Who gets alerts:
+  - Anyone signed in on the site who saved a topic under "🔔 Alerts"
+    (public.alert_prefs). Needs the SUPABASE_SERVICE_KEY secret
+    (Supabase > Project Settings > API Keys > service_role / secret key;
+    never put it in the page).
+  - The NTFY_TOPIC secret goes to the owner, whose watch list is read from
+    the account with the ALERT_EMAIL secret. If the owner also saved a topic
+    on the site, the site one wins.
+Without SUPABASE_SERVICE_KEY only NTFY_TOPIC gets alerts, NEW section only.
 
 Usage: python scripts/notify.py output/dashboard.html [output/dashboard_mnf.html ...]
 """
@@ -59,37 +62,62 @@ def picks_for(html, watch_keys):
     return json.loads(out.stdout)
 
 
-def account_marks():
-    """Your marks from the dashboard account, or None if not set up / failed."""
-    key = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
-    email = os.environ.get("ALERT_EMAIL", "").strip().lower()
-    if not key or not email:
-        print("SUPABASE_SERVICE_KEY / ALERT_EMAIL not set -- skipping the Watching section.")
-        return None
+def supabase_get(path, key, params):
     h = {"apikey": key}
     if key.startswith("eyJ"):  # legacy service_role JWT; new sb_secret_ keys go in apikey only
         h["Authorization"] = f"Bearer {key}"
+    r = requests.get(f"{SUPABASE_URL}{path}", headers=h, params=params, timeout=20)
+    r.raise_for_status()
+    return r.json()
+
+
+def recipients():
+    """[{id, topic, marks}] -- marks is None when the account can't be read."""
+    owner_topic = os.environ.get("NTFY_TOPIC", "").strip()
+    owner_email = os.environ.get("ALERT_EMAIL", "").strip().lower()
+    key = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
+    owner = [{"id": "owner", "topic": owner_topic, "marks": None}] if owner_topic else []
+    if not key:
+        print("SUPABASE_SERVICE_KEY not set -- only NTFY_TOPIC gets alerts, without the Watching section.")
+        return owner
     try:
-        uid = None
-        for page in range(1, 11):
-            r = requests.get(f"{SUPABASE_URL}/auth/v1/admin/users", headers=h,
-                             params={"page": page, "per_page": 200}, timeout=20)
-            r.raise_for_status()
-            users = r.json().get("users", [])
-            uid = next((u["id"] for u in users if (u.get("email") or "").lower() == email), None)
-            if uid or len(users) < 200:
+        emails = {}
+        for page in range(1, 51):
+            users = supabase_get("/auth/v1/admin/users", key, {"page": page, "per_page": 200}).get("users", [])
+            emails.update({u["id"]: (u.get("email") or "").lower() for u in users})
+            if len(users) < 200:
                 break
-        if not uid:
-            print("No dashboard account with ALERT_EMAIL -- skipping the Watching section.")
-            return None
-        r = requests.get(f"{SUPABASE_URL}/rest/v1/user_state", headers=h,
-                         params={"select": "marks", "user_id": f"eq.{uid}"}, timeout=20)
-        r.raise_for_status()
-        rows = r.json()
-        return (rows[0].get("marks") or {}) if rows else {}
+        states = supabase_get("/rest/v1/user_state", key, {"select": "user_id,marks"})
     except Exception as e:
-        print("Couldn't read your marks from the account:", e)
-        return None
+        print("Couldn't read accounts from Supabase:", e)
+        return owner
+    try:
+        prefs = supabase_get("/rest/v1/alert_prefs", key, {"select": "user_id,ntfy_topic", "ntfy_topic": "not.is.null"})
+    except Exception as e:
+        print("Couldn't read alert_prefs (table not created yet?):", e)
+        prefs = []
+    marks = {s["user_id"]: s.get("marks") or {} for s in states}
+    out = {}
+    for p in prefs:
+        t = (p.get("ntfy_topic") or "").strip()
+        if t and p["user_id"] in emails:
+            out[p["user_id"]] = {"id": p["user_id"], "topic": t, "marks": marks.get(p["user_id"], {})}
+    if owner_topic:
+        owner_id = next((i for i, e in emails.items() if owner_email and e == owner_email), None)
+        if not owner_id:
+            print("No dashboard account with ALERT_EMAIL -- NTFY_TOPIC gets alerts without the Watching section.")
+            out.setdefault("owner", owner[0])
+        elif owner_id not in out:
+            out[owner_id] = {"id": owner_id, "topic": owner_topic, "marks": marks.get(owner_id, {}), "owner": True}
+        else:
+            out[owner_id]["owner"] = True
+    # Two people on the same topic would get every alert twice; keep the first.
+    seen, result = set(), []
+    for r in out.values():
+        if r["topic"] not in seen:
+            seen.add(r["topic"])
+            result.append(r)
+    return result
 
 
 def key(p):
@@ -150,57 +178,31 @@ def moved(a, b):
         return False
 
 
-def main():
-    topic = os.environ.get("NTFY_TOPIC", "").strip()
-    if not topic:
-        print("NTFY_TOPIC not set -- skipping phone alert.")
-        return
-    site = os.environ.get("PAGE_URL", "")
-
-    state = {}
-    if STATE.exists():
-        try:
-            state = json.loads(STATE.read_text())
-        except Exception:
-            pass
-    sent = set(state.get("sent", []))
-    watch_base = state.get("watch_base", {})  # key -> line/price when first seen watched
-    watch_last = state.get("watch_last", {})  # key -> line/price at the last alert
-
-    marks = account_marks()
+def alert_for(rec, picks, watched_all, week, st):
+    """This person's notification payload (or None). Updates their state `st`;
+    the returned commit() marks everything as sent, once the push went out."""
+    marks = rec["marks"]
+    sent = set(st.get("sent", []))
     watch_keys = {k for k, v in (marks or {}).items() if v == "watch"}
-    if marks is not None:  # forget rows you stopped watching, so re-watching starts fresh
-        watch_base = {k: v for k, v in watch_base.items() if k in watch_keys}
-        watch_last = {k: v for k, v in watch_last.items() if k in watch_keys}
-
-    picks, watched, week = [], {}, None
-    for html in sys.argv[1:]:
-        if not Path(html).exists():
-            continue
-        res = picks_for(html, watch_keys)
-        if not res:
-            continue
-        week = week or res["week"]
-        picks += res["picks"]
-        for w in res.get("watched", []):
-            watched[w["key"]] = w
+    # Forget rows they stopped watching, so re-watching starts fresh.
+    watch_base = {k: v for k, v in st.get("watch_base", {}).items() if marks is None or k in watch_keys}
+    watch_last = {k: v for k, v in st.get("watch_last", {}).items() if marks is None or k in watch_keys}
 
     new = [p for p in picks if key(p) not in sent and not (marks or {}).get(p.get("key"))]
     new.sort(key=lambda p: 0 if p["tier"] == "MUST BET" else 1)
-
+    watched = {k: w for k, w in watched_all.items() if k in watch_keys}
     snap = {k: {"line": w["line"], "price": w["price"]} for k, w in watched.items()}
     for k, s in snap.items():
         if k not in watch_base or watch_base[k].get("line") is None:
             watch_base[k] = s
     n_moved = sum(1 for k, s in snap.items() if moved(watch_last.get(k), s))
-    # A newly watched row is quiet until it moves: no buzz just for adding it.
+    st["watch_base"], st["watch_last"], st["sent"] = watch_base, watch_last, sorted(sent)
+
     if not new and not n_moved:
-        print(f"Nothing new ({len(picks)} picks on the board, all seen) and no watched line moved.")
-        STATE.parent.mkdir(exist_ok=True)
+        # A newly watched row is quiet until it moves: no buzz just for adding it.
         for k, s in snap.items():
             watch_last.setdefault(k, s)
-        STATE.write_text(json.dumps({"week": week, "sent": sorted(sent), "watch_base": watch_base, "watch_last": watch_last}))
-        return
+        return None, None
 
     n_must = sum(1 for p in new if p["tier"] == "MUST BET")
     parts = []
@@ -223,18 +225,70 @@ def main():
         if len(ws) > MAX_LINES:
             lines.append(f"+{len(ws) - MAX_LINES} more on your watch list")
 
-    r = requests.post("https://ntfy.sh/", json={
-        "topic": topic, "title": title, "message": "\n".join(lines),
-        "tags": ["football"], "click": site or None, "priority": 4 if n_must else 3,
-    }, timeout=20)
-    print("ntfy:", r.status_code, title)
-    if r.ok:
-        STATE.parent.mkdir(exist_ok=True)
+    def commit():
         watch_last.update(snap)
-        STATE.write_text(json.dumps({
-            "week": week, "sent": sorted(sent | {key(p) for p in picks}),
-            "watch_base": watch_base, "watch_last": watch_last,
-        }))
+        st["sent"] = sorted(sent | {key(p) for p in picks})
+
+    payload = {"topic": rec["topic"], "title": title, "message": "\n".join(lines),
+               "tags": ["football"], "priority": 4 if n_must else 3}
+    return payload, commit
+
+
+def main():
+    recs = recipients()
+    if not recs:
+        print("No NTFY_TOPIC and nobody has saved an alert topic -- skipping phone alerts.")
+        return
+    site = os.environ.get("PAGE_URL", "")
+
+    state = {}
+    if STATE.exists():
+        try:
+            state = json.loads(STATE.read_text())
+        except Exception:
+            pass
+    users = state.get("users")
+    if users is None:  # before per-person alerts there was one shared state, and it was the owner's
+        users = {"owner": {k: state[k] for k in ("sent", "watch_base", "watch_last") if k in state}}
+    owner_id = next((r["id"] for r in recs if r.get("owner")), None)
+    if owner_id and "owner" in users and owner_id not in users:
+        users[owner_id] = users.pop("owner")
+
+    watch_keys = set()
+    for r in recs:
+        watch_keys |= {k for k, v in (r["marks"] or {}).items() if v == "watch"}
+    picks, watched, week = [], {}, None
+    for html in sys.argv[1:]:
+        if not Path(html).exists():
+            continue
+        res = picks_for(html, watch_keys)
+        if not res:
+            continue
+        week = week or res["week"]
+        picks += res["picks"]
+        for w in res.get("watched", []):
+            watched[w["key"]] = w
+
+    print(f"Alerts for {len(recs)} {'person' if len(recs) == 1 else 'people'}; {len(picks)} picks on the board.")
+    for r in recs:
+        st = users.setdefault(r["id"], {})
+        payload, commit = alert_for(r, picks, watched, week, st)
+        who = "owner" if r.get("owner") or r["id"] == "owner" else r["id"][:8]
+        if not payload:
+            print(f"[{who}] nothing new and no watched line moved.")
+            continue
+        if site:
+            payload["click"] = site
+        try:
+            resp = requests.post("https://ntfy.sh/", json=payload, timeout=20)
+            print(f"[{who}] ntfy: {resp.status_code} {payload['title']}")
+            if resp.ok:
+                commit()
+        except Exception as e:
+            print(f"[{who}] ntfy failed: {e}")
+
+    STATE.parent.mkdir(exist_ok=True)
+    STATE.write_text(json.dumps({"week": week, "users": users}))
 
 
 if __name__ == "__main__":
