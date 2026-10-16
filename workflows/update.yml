@@ -1,0 +1,103 @@
+name: Update dashboard
+
+# Every 3 hours from 8am to 8pm Mountain (GitHub schedules run on UTC):
+# 14,17,20,23,02 UTC = 8am, 11am, 2pm, 5pm, 8pm MDT. After Nov 1 (MST)
+# these land an hour earlier (7am-7pm). Scheduled runs can start a few
+# minutes late when GitHub is busy. "Run workflow" on the Actions tab
+# refreshes on demand.
+on:
+  schedule:
+    - cron: "7 2,14,17,20,23 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: dashboard
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      TZ: America/Denver
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # Last run's data/ folder: keeps the previous odds if the quota guard
+      # skips a pull, and remembers which picks were already alerted.
+      - name: Restore last data
+        uses: actions/cache/restore@v4
+        with:
+          path: data
+          key: data-${{ github.run_id }}
+          restore-keys: data-
+
+      - name: Refresh data and build the dashboard
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          ODDS_MIN_REMAINING: "500"
+        run: python run.py
+
+      - name: Prepare site
+        run: |
+          mkdir -p site
+          cp output/dashboard.html site/index.html
+          cp output/dashboard.html site/dashboard.html
+          if [ -f output/dashboard_mnf.html ] && grep -q 'dashboard_mnf.html' output/dashboard.html; then
+            cp output/dashboard_mnf.html site/
+          fi
+          touch site/.nojekyll
+
+      - name: Phone alert (only if the NTFY_TOPIC secret is set)
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          PAGE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: |
+          if [ -n "$NTFY_TOPIC" ]; then
+            pip install playwright==1.47.0 && python -m playwright install --with-deps chromium
+            python scripts/notify.py site/index.html site/dashboard_mnf.html || echo "alert failed (site still updates)"
+          else
+            echo "No NTFY_TOPIC secret -- skipping."
+          fi
+
+      - name: Save data for the next run
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data
+          key: data-${{ github.run_id }}
+
+      # Every build is kept for 90 days (Actions > run > Artifacts) so
+      # picks can be graded against results later.
+      - name: Archive this build
+        uses: actions/upload-artifact@v4
+        with:
+          name: board-${{ github.run_id }}
+          path: output/*.html
+          retention-days: 90
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
