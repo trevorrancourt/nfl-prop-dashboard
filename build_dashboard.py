@@ -4030,6 +4030,36 @@ document.getElementById('tbody').addEventListener('change', (e) => {{
   render();
 }});
 
+// Filter checkboxes remember their state (added 2026-10-16, per Trevor:
+// "whenever i reload the page, hide x rows is checked but the x still show
+// up"). The browser restored the tick on reload while these variables
+// started false, so box and table disagreed. Now each box's state is saved
+// here and read back before the first render.
+const FILTER_STORAGE_KEY = 'nfl_prop_dashboard_filters_v1';
+const FILTER_BOXES = {{
+  hideMarkedX: v => {{ hideMarkedX = v; }},
+  hideReview: v => {{ hideReview = v; }},
+  ladderOnlyFilter: v => {{ ladderOnly = v; }},
+  weakMatchupFilter: v => {{ weakMatchupOnly = v; }},
+  strongMatchupFilter: v => {{ strongMatchupOnly = v; }},
+}};
+function saveFilterBoxes() {{
+  const st = {{}};
+  for (const id of Object.keys(FILTER_BOXES)) {{ const el = document.getElementById(id); if (el) st[id] = el.checked; }}
+  try {{ localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(st)); }} catch (e) {{}}
+}}
+(function restoreFilterBoxes() {{
+  let saved = {{}};
+  try {{ saved = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{{}}') || {{}}; }} catch (e) {{}}
+  for (const [id, set] of Object.entries(FILTER_BOXES)) {{
+    const el = document.getElementById(id);
+    if (!el) continue;
+    if (typeof saved[id] === 'boolean') el.checked = saved[id];
+    set(el.checked); // whatever the box shows is what the table uses
+    el.addEventListener('change', saveFilterBoxes);
+  }}
+}})();
+
 document.getElementById('hideReview').addEventListener('change', (e) => {{
   hideReview = e.target.checked;
   render();

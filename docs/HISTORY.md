@@ -3245,3 +3245,7 @@ Trevor: "jeremiyah love is out this week and tyler allgeier is a must bet under"
     - Monangai matched by name → Questionable.
     - A long-gone IR player skipped.
   - With that, Allgeier Rush Yds Under went MUST BET → 🧊🧊🧊 with ⚠️ "Jeremiyah Love (RB) is Out". Direction-aware ❓ (no Under at all when the lead back is out) was offered but not requested.
+
+## Filter checkboxes survive reload (2026-10-16)
+
+Trevor: "whenever i reload the page, hide x rows is checked but the x still show up". The browser restored the checkbox tick on reload while `hideMarkedX` (and the other filter variables) started false. Now Hide ❌, Hide ❓, Ladder only, Weak matchup only and Strong matchup only are saved in localStorage (`nfl_prop_dashboard_filters_v1`) and synced from the box before the first render. Tested headlessly: tick → reload keeps rows hidden; untick → reload shows them.

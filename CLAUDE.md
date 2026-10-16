@@ -92,6 +92,7 @@ It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of
 - Marks: `nfl_prop_dashboard_marks_v1`
 - Bets: `nfl_prop_dashboard_bets_v1` (key = `WEEK|player|team|stat_col`)
 - Columns: `nfl_prop_dashboard_cols_v1`
+- Filter checkboxes (Hide ❌/❓, Ladder, Weak/Strong matchup): `nfl_prop_dashboard_filters_v1`
 - My Bets has Backup/Restore (JSON).
 - **Login so bets sync across devices: live 2026-10-16** (Supabase project `ugyxzhdcmzqhibajtbwa`; URL + anon key at the top of `build_dashboard.py`). Look for "Sign-in + cross-device sync" in the template. The merge is three-way against the last synced copy (`nfl_prop_dashboard_sync_base_v1|<user id>`), and writes are conditional on `updated_at` so two devices can't overwrite each other. Not available on the Mac's file:// copy. The plan Trevor agreed to:
   - **Supabase** (free) handles email magic-link sign-in, plus one table holding each user's marks and bets.
