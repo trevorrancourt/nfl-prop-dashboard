@@ -3159,3 +3159,11 @@ Trevor: "i want the others to get the alerts when they sign in".
 - **Workflow:** the alert step now runs if `NTFY_TOPIC` or `SUPABASE_SERVICE_KEY` is set.
 - **Tested:** simulated multi-person refreshes (a friend gets a pick Trevor was already sent; a friend's pass excluded; only the friend buzzed on their line move; old state carried over; duplicate topic deduped) and the Alerts box headlessly (suggest, validate, test send, save, load, clear, missing table). Two-device sync tests still pass.
 - ntfy.sh's free tier caps messages per day per sender IP (around 250), which is plenty for a handful of people at ≤5 refreshes a day.
+
+## One-tap Refresh lines (2026-10-16)
+
+Trevor: "can i put a button in the dashboard to refresh the lines also?", then "let's do true one tap". He didn't say who should be able to use it, so it's restricted to an `ALLOWED_EMAILS` list (just him) to protect Odds API credits; adding friends means adding their email to that secret.
+
+- New Supabase Edge Function `supabase/functions/refresh-lines/index.ts`. It verifies the caller's Supabase session and email, reads the latest `update.yml` run (GET), or dispatches one on `main` (POST, refused while a run is queued or in progress). CORS is limited to trevorrancourt.github.io. Secrets: `GH_TOKEN`, `ALLOWED_EMAILS`.
+- Page: `#refreshCtl` in the signed-in control, showing "🔄 Refresh lines" and "Lines Xm old". While a refresh runs it polls every 20 s, then shows "✅ New lines ready · Reload" or a failure note, with a 15-minute timeout. Hidden when the function is missing or the user isn't allowed. `ODDS_TIME_UTC` is the odds pull time converted to UTC at build time (`odds_time_utc()`).
+- Tested headlessly against a simulated function: not deployed or not allowed → hidden; already running → follows it; tap → running → done → reload; refused POST → message. Sync tests still pass. The function itself was not run here (no Deno/Supabase access from the cloud session).

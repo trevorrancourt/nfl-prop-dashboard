@@ -876,6 +876,7 @@ const TEAM_RESULTS = {team_results_json};
 const INJ_BY_TEAM = {injuries_by_team_json};
 const WEEK = {week};
 const ODDS_TIME = "{odds_time}";
+const ODDS_TIME_UTC = "{odds_time_utc}"; // same moment, with timezone, for "Lines Xm old"
 const SEASON = {season};
 const TOTAL_WEEKS = 18;
 let activePos = "ALL";
@@ -1212,6 +1213,7 @@ function renderSyncCtl() {{
     ctl.innerHTML = `<span class="muted" title="Your marks and bets are saved to your account and show up on any device where you sign in.">&#9729;&#65039; ${{escapeHtml(syncUser.email || 'Signed in')}} &middot; <span id="syncStatus">${{syncStatusText()}}</span></span>
       <button type="button" class="weeks-mini-btn" id="alertsBtn" title="Get your own phone alerts: new MUST BET / 3-star picks, plus your Watching list when lines move.">&#128276; Alerts${{alertTopic ? ' on' : ''}}</button>
       <button type="button" class="weeks-mini-btn" id="syncSignOut">Sign out</button>
+      <span id="refreshCtl" style="display:none; margin-left:6px;"></span>
       <span id="alertsForm" style="display:none;">
         <input type="text" id="alertsTopic" placeholder="ntfy topic" autocomplete="off" spellcheck="false" style="background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:13px; width:200px;">
         <button type="button" class="weeks-mini-btn" id="alertsSave">Save</button>
@@ -1298,6 +1300,104 @@ async function testAlert() {{
   }}
 }}
 
+// ---- One-tap "Refresh lines" (added 2026-10-16, per Trevor). Calls the
+// refresh-lines Supabase Edge Function (supabase/functions/refresh-lines),
+// which holds the GitHub token and starts the Update dashboard workflow.
+// Only shown to signed-in users on the function's ALLOWED_EMAILS list, and
+// hidden entirely if the function isn't deployed. Each refresh costs ~130
+// Odds API credits.
+let refreshAllowed = false;
+let refreshState = '';    // '', 'running', 'done', 'failed', 'error'
+let refreshMsg = '';
+let refreshTapAt = 0;
+let refreshPoll = null;
+function linesAgeText() {{
+  const t = Date.parse(ODDS_TIME_UTC);
+  if (!ODDS_TIME_UTC || isNaN(t)) return '';
+  const m = Math.max(0, Math.round((Date.now() - t) / 60000));
+  const age = m < 60 ? m + 'm' : (m < 1440 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : Math.floor(m / 1440) + 'd');
+  return 'Lines ' + age + ' old';
+}}
+function renderRefresh() {{
+  const el = document.getElementById('refreshCtl');
+  if (!el) return;
+  if (!refreshAllowed) {{ el.style.display = 'none'; el.innerHTML = ''; return; }}
+  el.style.display = '';
+  let html = '';
+  if (refreshState === 'running') {{
+    html = '<span class="muted">&#128260; ' + escapeHtml(refreshMsg || 'Refreshing lines… usually 3-4 min') + '</span>';
+  }} else if (refreshState === 'done') {{
+    html = '<button type="button" class="weeks-mini-btn" id="refreshReload">&#9989; New lines ready &middot; Reload</button>';
+  }} else {{
+    html = `<button type="button" class="weeks-mini-btn" id="refreshBtn" title="Pull fresh odds and rebuild the board now (takes 3-4 minutes, uses about 130 Odds API credits).">&#128260; Refresh lines</button>`;
+    if (refreshMsg) html += ' <span class="muted">' + escapeHtml(refreshMsg) + '</span>';
+  }}
+  html += ' <span class="muted" id="linesAge">' + linesAgeText() + '</span>';
+  el.innerHTML = html;
+}}
+async function callRefresh(method) {{
+  const res = await sb.functions.invoke('refresh-lines', {{ method: method }});
+  if (res.error) throw res.error;
+  return res.data || {{}};
+}}
+async function loadRefreshStatus() {{
+  if (!sb || !syncUser) return;
+  const user = syncUser;
+  let d;
+  try {{ d = await callRefresh('GET'); }} catch (e) {{ return; }} // not deployed -- no button
+  if (syncUser !== user) return;
+  refreshAllowed = !!d.allowed;
+  if (d.allowed && d.running && refreshState !== 'running') {{
+    refreshState = 'running';
+    refreshMsg = 'A refresh is already running…';
+    refreshTapAt = d.run ? Date.parse(d.run.created_at) : Date.now();
+    startRefreshPoll();
+  }}
+  renderRefresh();
+}}
+function startRefreshPoll() {{
+  clearInterval(refreshPoll);
+  refreshPoll = setInterval(checkRefresh, 20000);
+}}
+async function checkRefresh() {{
+  let d;
+  try {{ d = await callRefresh('GET'); }} catch (e) {{ return; }}
+  const run = d.run;
+  const ours = run && Date.parse(run.created_at) >= refreshTapAt - 30000;
+  if (ours && !d.running) {{
+    clearInterval(refreshPoll);
+    if (run.conclusion === 'success') {{ refreshState = 'done'; refreshMsg = ''; }}
+    else {{ refreshState = 'failed'; refreshMsg = 'Refresh failed (' + (run.conclusion || 'unknown') + '). Try again later.'; }}
+  }} else if (Date.now() - refreshTapAt > 15 * 60000) {{
+    clearInterval(refreshPoll);
+    refreshState = 'failed';
+    refreshMsg = 'Still not done after 15 min. Check the Actions tab on GitHub.';
+  }} else if (ours) {{
+    refreshMsg = 'Refreshing lines… ' + Math.max(1, Math.round((Date.now() - refreshTapAt) / 60000)) + ' min so far (usually 3-4)';
+  }}
+  renderRefresh();
+}}
+async function startRefresh() {{
+  refreshState = 'running';
+  refreshMsg = 'Starting…';
+  renderRefresh();
+  let d;
+  try {{ d = await callRefresh('POST'); }} catch (e) {{ d = {{ error: (e && e.message) || 'request failed' }}; }}
+  if (d.error || !d.allowed) {{
+    refreshState = 'error';
+    refreshMsg = "Couldn't start: " + (d.error || 'not allowed for this account');
+  }} else {{
+    refreshTapAt = d.started ? Date.now() : (d.run ? Date.parse(d.run.created_at) : Date.now());
+    refreshMsg = d.started ? 'Refreshing lines… usually 3-4 min' : 'A refresh is already running…';
+    startRefreshPoll();
+  }}
+  renderRefresh();
+}}
+setInterval(() => {{
+  const el = document.getElementById('linesAge');
+  if (el) el.textContent = linesAgeText();
+}}, 60000);
+
 async function sendMagicLink() {{
   const input = document.getElementById('syncEmail');
   const msg = document.getElementById('syncStatus');
@@ -1321,8 +1421,9 @@ function onAuthChange(session) {{
   syncStatus = '';
   alertTopic = null;
   alertsAvailable = true;
+  refreshAllowed = false;
   renderSyncCtl();
-  if (u) setTimeout(() => {{ syncNow(); loadAlertPrefs(); }}, 0); // not inside the auth callback (supabase-js can deadlock)
+  if (u) setTimeout(() => {{ syncNow(); loadAlertPrefs(); loadRefreshStatus(); }}, 0); // not inside the auth callback (supabase-js can deadlock)
   if (myBetsOpen) openMyBetsModal();
 }}
 
@@ -1342,6 +1443,10 @@ function initSync() {{
       if (f.style.display === '') document.getElementById('syncEmail').focus();
     }} else if (t.id === 'syncSend') {{
       sendMagicLink();
+    }} else if (t.id === 'refreshBtn') {{
+      startRefresh();
+    }} else if (t.id === 'refreshReload') {{
+      location.reload();
     }} else if (t.id === 'alertsBtn') {{
       openAlertsForm();
     }} else if (t.id === 'alertsSave') {{
@@ -4478,6 +4583,16 @@ def ordered_stat_labels():
     return seen
 
 
+def odds_time_utc(odds):
+    """The odds pull time as UTC ISO. generated_at is naive local time (the
+    workflow runs with TZ=America/Denver), so it's read as this machine's zone."""
+    try:
+        from datetime import timezone
+        return datetime.fromisoformat(odds["generated_at"]).astimezone(timezone.utc).isoformat()
+    except Exception:
+        return ""
+
+
 def main():
     stats, odds, weather, coverage, injuries, injuries_by_team = load_caches()
     odds_lookup = build_odds_lookup(odds)
@@ -4510,6 +4625,7 @@ def main():
         week=stats["week"],
         stats_time=stats["generated_at"],
         odds_time=odds["generated_at"] if odds else "not fetched",
+        odds_time_utc=odds_time_utc(odds),
         no_odds_note=no_odds_note,
         stat_buttons=stat_buttons,
         rows_json=json.dumps(rows),

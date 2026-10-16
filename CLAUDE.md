@@ -50,6 +50,8 @@ It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of
   create policy "update own" on public.alert_prefs for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
   ```
 
+**Refresh lines button (one tap, 2026-10-16):** signed-in users on the allow list see "🔄 Refresh lines" plus "Lines Xm old" (`ODDS_TIME_UTC`). It calls the Supabase Edge Function `refresh-lines` (source in `supabase/functions/refresh-lines/index.ts`, deployed by pasting into the Supabase dashboard editor). The function checks the user's email against its `ALLOWED_EMAILS` secret, then starts `update.yml` with its `GH_TOKEN` secret (fine-grained token: this repo only, Actions read/write). It won't start a second run while one is going, and the page polls until the run finishes. Without the function deployed, the button stays hidden. Each tap costs about 130 Odds API credits.
+
 ## Editing `build_dashboard.py`: gotchas that have bitten before
 - `HTML_TEMPLATE` goes through `.format()`, so every JS/CSS brace must be doubled: `{{ }}`. Template literals become `${{x}}`.
 - It's a normal (not raw) Python string, so in JS `'\n'` write `'\\n'`, and avoid `\'` (use the other quote style).
