@@ -3133,3 +3133,7 @@ Trevor chose GitHub Pages (public link), with a refresh every 3 hours from 8am t
 - Hidden on the Mac's file:// copy, since the emailed link can only open the shared site.
 
 **Tested** headless against a fake Supabase backend with two simulated devices: merging on first sign-in, cross-device add, delete carrying over while the other device edits at the same moment, reload with no extra writes, sign-out. Also tested the real supabase-js library loading and sending the sign-in email request, the expired-link message, and that the unconfigured build has no page errors and no sign-in button. Not yet tested against a real Supabase project.
+
+## Default weeks = Last 4 (2026-10-16)
+
+Trevor: "make it so that the default view is last 4 games not all games ... and make that what the notifications send". `selectedWeeks` now starts as `lastNWeeks(DEFAULT_LAST_WEEKS)` (4) instead of every played week. `check_must_bets.py` / `notify.py` read the page's default `selectedWeeks`, so alerts follow it with no change of their own. "All played" is still one click away. MUST BET's 4-game minimum was not changed: a player or defense with a bye (or a missed game) in the 4-week window has 3 games and can reach 3-star at most.

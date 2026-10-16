@@ -780,7 +780,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <select id="gameFilter" title="Narrow the table to just one game's players. Resets to 'All Games' automatically every Tuesday morning (after that week's Monday Night game is done), so it never accidentally stays stuck on a game that's already been played -- doesn't require re-running python3 run.py to clear."></select>
     <span class="muted" style="margin-left:16px;">Weeks:</span>
     <div class="weeks-filter" id="weeksFilter">
-      <button type="button" id="weeksToggle" class="weeks-toggle" title="Choose which weeks of the current season count toward Avg / Opp Allows / hit rate / signals / everything else on this page. Defaults to every week played so far (the upcoming week has no games yet, so it isn't included)."></button>
+      <button type="button" id="weeksToggle" class="weeks-toggle" title="Choose which weeks of the current season count toward Avg / Opp Allows / hit rate / signals / everything else on this page. Defaults to the last 4 weeks played (the upcoming week has no games yet, so it isn&#39;t included)."></button>
       <div class="weeks-panel" id="weeksPanel">
         <div class="weeks-panel-actions">
           <button type="button" id="weeksAll" class="weeks-mini-btn">All</button>
@@ -792,8 +792,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
     <span class="weeks-quick-group">
       <button type="button" class="weeks-mini-btn weeks-quick" data-last="2" title="Only the 2 most recent played weeks. Week-based, so a player whose team had a bye in that span shows 1 game.">Last 2</button>
-      <button type="button" class="weeks-mini-btn weeks-quick" data-last="4" title="Only the 4 most recent played weeks. Week-based, so a bye in that span means 3 games for that team.">Last 4</button>
-      <button type="button" class="weeks-mini-btn weeks-quick" data-last="all" title="Every week played so far (the default).">All played</button>
+      <button type="button" class="weeks-mini-btn weeks-quick" data-last="4" title="Only the 4 most recent played weeks (the default). Week-based, so a bye in that span means 3 games for that team.">Last 4</button>
+      <button type="button" class="weeks-mini-btn weeks-quick" data-last="all" title="Every week played so far.">All played</button>
     </span>
     <button type="button" id="myBetsBtn" class="pos-btn" style="margin-left:16px;" title="Every bet you've marked &#9989; (all weeks, not just this one), with result tracking: record, total staked, and profit.">&#128210; My Bets</button>
     <span id="syncCtl" style="display:none; margin-left:10px;"></span>
@@ -1785,8 +1785,8 @@ const MARK_EMOJI = {{ bet: '✅', watch: '🌕', pass: '❌' }};
 let sortKey = "signal_rank";
 let sortDir = -1;
 // Which weeks of the current season count toward every stat on this page.
-// Defaults to every week played so far (1 through the current/upcoming
-// week) -- see populateWeeksFilter() for how the checkboxes stay in sync.
+// Defaults to the last DEFAULT_LAST_WEEKS played weeks (was every played
+// week until 2026-10-16) -- see populateWeeksFilter() for the checkboxes.
 // WEEK is the upcoming (not yet played) week, so the default is every
 // week already played: 1 .. WEEK-1. (Before 2026-10-07 it was 1 .. WEEK,
 // which showed "Wk 1-5" on a Week 5 board even though Week 5 has no games
@@ -1797,7 +1797,12 @@ function lastNWeeks(n) {{
   const start = Math.max(1, end - n + 1);
   return new Set(Array.from({{length: end - start + 1}}, (_, i) => start + i));
 }}
-let selectedWeeks = lastNWeeks(TOTAL_WEEKS);
+// Default = the 4 most recent played weeks (2026-10-16, per Trevor: "make
+// it so that the default view is last 4 games"). Phone alerts read this
+// same default, so they follow it too. Week-based: a team with a bye in
+// that span has 3 games, which is short of MUST BET's 4-game minimum.
+const DEFAULT_LAST_WEEKS = 4;
+let selectedWeeks = lastNWeeks(DEFAULT_LAST_WEEKS);
 
 function fmt(v, suffix) {{
   if (v === null || v === undefined) return '<span class="muted">-</span>';

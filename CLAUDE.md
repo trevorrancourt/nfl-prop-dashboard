@@ -52,7 +52,7 @@ The two boards link to each other.
   - A player's miss doesn't count against a top-5 tough defense.
   - A defense's miss doesn't count against an offense whose usual output is under 0.75× the line.
   - The adjusted rate applies only if enough games remain.
-- **Weeks filter:** defaults to played weeks (1..WEEK-1). Last 2 / Last 4 / All played buttons. Signals follow the selected weeks; MUST BET always needs 4+ games.
+- **Weeks filter:** defaults to the last 4 played weeks (`DEFAULT_LAST_WEEKS`, changed 2026-10-16 per Trevor; was 1..WEEK-1). Phone alerts use the same default. Last 2 / Last 4 / All played buttons. Signals follow the selected weeks; MUST BET always needs 4+ games.
 - **Context only, not picks:** game script panel/popup (🎬), Second-look checklist, ladder 🪜, injury impact 🩹. In backtests only game script beat a coin flip (58%), on a small sample. Be honest about small samples; the consistency theory is not proven yet.
 
 ## Browser storage (per browser; the main thing to build next)
