@@ -3299,3 +3299,11 @@ Built:
 - `build_rows` marks `rb_lead` = each team's RB with the highest `rb_carry_shares`.
 - In `enrichRow`'s demotion block (checked first): if `BLOWOUT_FAV` (10) <= `tbTeamSpread(r, tbGame(r))`, and the row is `rb_lead` with stat_col rushing_yards or carries, Over side, and lvl ≥ 1 → ❓ "Blowout risk -- TEAM is favored by X; lead backs often sit late …". `blowoutFlag` keeps it out of 💡.
 - Tested with IND forced to -10.5: Taylor rush yds/attempts Overs → ❓ (was 🔥🔥 / MUST BET), receptions untouched by this rule, backup Seth McGowan untouched; at -6.5 no blowout reason.
+
+## Backup RB blowout rules + 📜 My rules page (2026-10-16)
+
+Trevor: "so how should affect black? Cause I think he might actually be an over play". His carries were 14 and 7 in SF's two 20+ wins vs 4-6 otherwise. It's an upside bet, not a consistency one. Offered: (1) no backup rush Unders for 10+ favorites, and (2) a "blowout upside" 💡 on backup rush Overs. Trevor: "Like that a lot. Can we also make a 'my rules' section so I can see specific things we've programmed".
+
+- **Backup rule:** in the demotion block, after the lead-back rule: a non-`rb_lead` RB on Rush Yds/Attempts with `favBy >= BLOWOUT_FAV`, where the row isn't already a 3-star/MUST Over, gets `backupBlowout`. Any level → 0, with ❓ reason "Blowout upside -- SF is favored by 10.5, so the backup tends to get the late carries; no Under (would have been …)" plus `blowoutGamesText(r)` (his stat in his team's 17+ wins from TEAM_RESULTS). `ideaReason` = "blowout upside on the Over … an upside bet, not a consistency pick" → 💡, rank 5.
+  - Tested with SF forced to -10.5: Black Rush Att U 9.5 (would have been a MUST BET under) → 💡 with "7 in Wk2 (won by 22), 14 in Wk1 (won by 20)". At -6.5 it stays a MUST BET Under.
+- **📜 My rules:** new button next to My Bets opens `openMyRulesModal()` with `myRulesHtml()`: The groups / What counts / Turns a pick into a ❓ / Alerts. The numbers come from the JS constants plus `RULE_NUMS` (IMPACT_SNAP_PCT, RB_CARRY_SHARE_ROLE, TRADE_SETTLE_GAMES passed from Python). CLAUDE.md now says to update it with every rule change.

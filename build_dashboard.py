@@ -916,6 +916,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <button type="button" class="weeks-mini-btn weeks-quick" data-last="all" title="Every week played so far.">All played</button>
     </span>
     <button type="button" id="myBetsBtn" class="pos-btn" style="margin-left:16px;" title="Every bet you've marked &#9989; (all weeks, not just this one), with result tracking: record, total staked, and profit.">&#128210; My Bets</button>
+    <button type="button" id="myRulesBtn" class="pos-btn" style="margin-left:6px;" title="Every rule the board applies, in plain words.">&#128220; My rules</button>
     <span id="syncCtl" style="display:none; margin-left:10px;"></span>
   </div>
   <div class="controls">
@@ -998,6 +999,7 @@ const WEEK = {week};
 const ODDS_TIME = "{odds_time}";
 const ODDS_TIME_UTC = "{odds_time_utc}"; // same moment, with timezone, for "Lines Xm old"
 const SEASON = {season};
+const RULE_NUMS = {rule_nums_json}; // Python-side thresholds, for the My rules page
 const TOTAL_WEEKS = 18;
 let activePos = "ALL";
 let activeStat = "ALL";
@@ -3491,7 +3493,7 @@ function enrichRow(r, weeks, defCache) {{
   // stars"), instead of holding it at 3.
   const roleChanges = roleChangeReasons(r);
   const roleCapped = false;
-  let demoteWhy = null, demotedFrom = 0, blowoutFlag = false;
+  let demoteWhy = null, demotedFrom = 0, blowoutFlag = false, backupBlowout = false;
   {{
     const lvlNow = Math.max(hotLevel, coldLevel);
     const sideNow = hotLevel > coldLevel ? 'over' : 'under';
@@ -3506,12 +3508,17 @@ function enrichRow(r, weeks, defCache) {{
     if (lvlNow >= 1 && r.rb_lead && (r.stat_col === 'rushing_yards' || r.stat_col === 'carries') && sideNow === 'over' && favBy !== null && favBy >= BLOWOUT_FAV) {{
       blowoutFlag = true;
       demoteWhy = `Blowout risk -- ${{r.team}} is favored by ${{favBy}}; lead backs often sit late in blowouts, so no rush Over (would have been ${{was}}).` + consLine;
+    }} else if (r.position === 'RB' && !r.rb_lead && (r.stat_col === 'rushing_yards' || r.stat_col === 'carries') && favBy !== null && favBy >= BLOWOUT_FAV && cons && !(lvlNow >= 3 && sideNow === 'over')) {{
+      // Backup in a likely blowout (2026-10-16, per Trevor, on Kaelon Black):
+      // no rush Unders (he gets the late carries), and his rush Over is a 💡.
+      backupBlowout = true;
+      demoteWhy = `Blowout upside -- ${{r.team}} is favored by ${{favBy}}, so the backup tends to get the late carries` + (lvlNow >= 1 && sideNow === 'under' ? `; no Under (would have been ${{was}} under)` : '') + '.' + blowoutGamesText(r);
     }} else if (lvlNow >= 1 && roleChanges.length) {{
       demoteWhy = `Role change -- would have been ${{was}} (${{sideNow}}): ${{roleChanges.join('; ')}}.` + consLine;
     }} else if (lvlNow === 1 || lvlNow === 2) {{
       demoteWhy = `Would have been ${{was}} (${{sideNow}}) -- below the 3-star bar.` + consLine + (tierCapReason ? ` Held under 3 by ${{tierCapReason}}.` : '');
     }}
-    if (demoteWhy) {{ demotedFrom = lvlNow; hotLevel = 0; coldLevel = 0; }}
+    if (demoteWhy) {{ demotedFrom = backupBlowout ? 0 : lvlNow; hotLevel = 0; coldLevel = 0; }}
   }}
 
   const hot = hotLevel > 0;
@@ -3603,7 +3610,9 @@ function enrichRow(r, weeks, defCache) {{
   // Not for ❓s caused by a role change or a matchup mismatch -- those are
   // the "don't trust it" ones.
   let ideaReason = null;
-  if (needsReview && !roleChanges.length && !mismatchFlag && !blowoutFlag) {{
+  if (backupBlowout) {{
+    ideaReason = `blowout upside on the Over: ${{r.team}} favored by ${{tbTeamSpread(r, tbGame(r))}} -- an upside bet, not a consistency pick`;
+  }} else if (needsReview && !roleChanges.length && !mismatchFlag && !blowoutFlag) {{
     const why = [];
     if (demotedFrom === 2) why.push('high end: would have been a 2-star');
     if (tb && tb.script && tb.script.effect > 0) why.push(`game script supports the ${{tb.lean === 'over' ? 'Over' : 'Under'}} (${{tb.script.text}})`);
@@ -5056,6 +5065,63 @@ document.querySelectorAll('.local-time[data-utc]').forEach(el => {{
   if (!isNaN(t)) el.textContent = t.toLocaleString([], {{ weekday: 'short', hour: 'numeric', minute: '2-digit' }});
 }});
 
+// ---- 📜 My rules (added 2026-10-16, per Trevor: "make a 'my rules' section
+// so I can see specific things we've programmed"). Plain-English list of
+// every rule the board applies; numbers come from the live constants, so
+// this can't drift from what the page actually does.
+function myRulesHtml() {{
+  const n = RULE_NUMS;
+  const li = s => `<li style="margin:3px 0;">${{s}}</li>`;
+  const sec = (title, items) => `<h3 class="modal-section-title">${{title}}</h3><ul style="margin:4px 0 10px 18px; padding:0;">${{items.map(li).join('')}}</ul>`;
+  return sec('The groups', [
+      '<b>&#11088; MUST BET</b> -- bet it. He cleared the line in every game and the defense allowed it in every game (' + CONS_MUST_MIN_GAMES + '+ games each), against one of the ' + MUST_BET_MATCHUP_TOP + ' defenses allowing the most (Over) / least (Under) of that stat.',
+      '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
+      '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, or a backup RB with blowout upside.',
+      '<b>&#10067;</b> -- everything else worth a glance. Hover any ❓ for exactly why it isn’t a pick.',
+    ])
+    + sec('What counts', [
+      'Weeks: the last ' + DEFAULT_LAST_WEEKS + ' played weeks by default (Last 2 / Last 4 / All played buttons). Signals follow whatever weeks are selected; MUST BET always needs ' + CONS_MUST_MIN_GAMES + '+ games.',
+      'Price: a price worse than ' + MAX_JUICE_PRICE + ' blocks a pick.',
+      'His misses don’t count against one of the ' + EXCUSE_TOUGH_TOP + ' toughest defenses for that stat (softest, for an Under).',
+      'A defense’s miss doesn’t count against an offense that usually gets under ' + Math.round(EXCUSE_OFF_RATIO * 100) + '% of the line (Over) -- "no fair test" when every game is excused.',
+      'Excusing only kicks in when enough games are left; MUST BET still needs a clean record with nothing excused.',
+    ])
+    + sec('Turns a pick into a ❓', [
+      '<b>Matchup mismatch:</b> an Under against a top-' + MISMATCH_OFF_TOP + ' offense needs the defense to have held every top-half offense it faced at or below their usual (an Over against a bottom-' + MISMATCH_OFF_TOP + ' offense: the mirror). Untested also counts.',
+      '<b>Role change:</b> a teammate with a real role (' + Math.round(n.impact_snap * 100) + '%+ snaps, or ' + Math.round(n.rb_carry_share * 100) + '%+ of team RB carries) at QB/RB/WR/TE is Out or Doubtful (NFL report + ESPN news); a trade involving a real-role player at his position (until ' + n.trade_settle + ' games after); or your own ⚠️ flag.',
+      '<b>Blowout, lead back:</b> his team favored by ' + BLOWOUT_FAV + '+ -- no Rush Yds / Rush Attempts Overs for the team’s lead RB.',
+      '<b>Blowout, backup:</b> his team favored by ' + BLOWOUT_FAV + '+ -- no rush Unders on the backup RB (he gets the late carries); his rush Overs get a 💡 instead.',
+      '<b>Heads-up only (doesn’t block):</b> a real-role teammate Questionable or who missed practice -- faded ⚠️.',
+    ])
+    + sec('Alerts', [
+      'NEW: MUST BETs and 3-stars you haven’t been sent and haven’t marked.',
+      'WATCHING: every 🌕 row, buzzing only when a line moves or the price moves 10+ cents.',
+      '💡 and ❓ rows are never alerted.',
+    ])
+    + '<div class="modal-note">Rules change only when you ask. The full history of every decision is in the repo’s docs/HISTORY.md.</div>';
+}}
+function openMyRulesModal() {{
+  closePlayerModal();
+  document.querySelector('#playerModalOverlay .modal-panel').style.maxWidth = '820px';
+  document.getElementById('modalPlayerName').textContent = '📜 My rules';
+  document.getElementById('modalMeta').innerHTML = 'Everything the board applies when it picks, in plain words.';
+  document.getElementById('modalBody').innerHTML = myRulesHtml();
+  document.getElementById('playerModalOverlay').style.display = 'flex';
+}}
+document.getElementById('myRulesBtn').addEventListener('click', openMyRulesModal);
+// Backup RB's carries in his team's blowout wins (17+), for the 💡 hover.
+function blowoutGamesText(r) {{
+  const out = [];
+  (r.game_weeks || []).forEach((w, i) => {{
+    const g = TEAM_RESULTS.find(t => t.week === w && (t.home === r.team || t.away === r.team));
+    if (!g || g.home_score === null) return;
+    const team = r.team;
+    const m = team === g.home ? g.home_score - g.away_score : g.away_score - g.home_score;
+    if (m >= 17) out.push(`${{Math.round(r.game_log[i] * 10) / 10}} in Wk${{w}} (won by ${{m}})`);
+  }});
+  return out.length ? ` His ${{r.stat_label}} in his team’s blowout wins: ${{out.join(', ')}}.` : '';
+}}
+
 render();
 initSync();
 </script>
@@ -5130,6 +5196,7 @@ def main():
         team_results_json=json.dumps(stats.get("team_results", [])),
         injuries_by_team_json=json.dumps(injuries_by_team),
         board_switch_html=board_switch_html(),
+        rule_nums_json=json.dumps({"impact_snap": IMPACT_SNAP_PCT, "rb_carry_share": RB_CARRY_SHARE_ROLE, "trade_settle": TRADE_SETTLE_GAMES}),
         supabase_config_json=json.dumps(
             {"url": SUPABASE_URL, "key": SUPABASE_ANON_KEY} if SUPABASE_URL and SUPABASE_ANON_KEY else None
         ),
