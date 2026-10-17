@@ -3307,3 +3307,20 @@ Trevor: "so how should affect black? Cause I think he might actually be an over 
 - **Backup rule:** in the demotion block, after the lead-back rule: a non-`rb_lead` RB on Rush Yds/Attempts with `favBy >= BLOWOUT_FAV`, where the row isn't already a 3-star/MUST Over, gets `backupBlowout`. Any level → 0, with ❓ reason "Blowout upside -- SF is favored by 10.5, so the backup tends to get the late carries; no Under (would have been …)" plus `blowoutGamesText(r)` (his stat in his team's 17+ wins from TEAM_RESULTS). `ideaReason` = "blowout upside on the Over … an upside bet, not a consistency pick" → 💡, rank 5.
   - Tested with SF forced to -10.5: Black Rush Att U 9.5 (would have been a MUST BET under) → 💡 with "7 in Wk2 (won by 22), 14 in Wk1 (won by 20)". At -6.5 it stays a MUST BET Under.
 - **📜 My rules:** new button next to My Bets opens `openMyRulesModal()` with `myRulesHtml()`: The groups / What counts / Turns a pick into a ❓ / Alerts. The numbers come from the JS constants plus `RULE_NUMS` (IMPACT_SNAP_PCT, RB_CARRY_SHARE_ROLE, TRADE_SETTLE_GAMES passed from Python). CLAUDE.md now says to update it with every rule change.
+
+## Backtest: does the spread move RB carries? (2026-10-17)
+
+Trevor asked whether the blowout logic holds up ("Does the data support that"). Script: `scripts/backtest_rb_spread.py`, nflverse 2019-2025 regular season. Lead/backup = 1st/2nd in team RB carries in prior games (3+ prior games). "Under" = below his own prior average (a stand-in for the line, not real prop lines).
+
+| Team spread | Won by 17+ | Backup carries vs his avg | Backup carries Under | Lead carries Under |
+|---|---|---|---|---|
+| Underdog/pick | 6% | 1.11× | 56% | 54% |
+| Fav 0.5-3.5 | 15% | 1.19× | 52% | 53% |
+| Fav 4-6.5 | 19% | 1.13× | 51% | 48% |
+| Fav 7-9.5 | 30% | 1.13× | 52% | 50% |
+| Fav 10+ | 37% | 1.20× | 50% | 55% |
+
+- In actual blowouts the backup gets 1.38× his usual carries (7-9.5 favorites, n=57), but since most games aren't blowouts, the overall shift is small: the backup carries Under goes from 56% (underdog) to 50-52% (favorite). Rush yards show no clear effect.
+- Lead back at 10+: carries Under 55% (so Overs 45%), mild support for "no lead rush Over". Rush yards 50/50.
+- The "2 of 19" blowout figure was 2026 only; over 7 seasons, 7-9.5 favorites won by 17+ 30% of the time and 10+ favorites 37%.
+- Verdict told to Trevor: the effect is real but mild. It supports a heads-up or a ❓, not betting the backup Over as a strong pick. No logic changed.
