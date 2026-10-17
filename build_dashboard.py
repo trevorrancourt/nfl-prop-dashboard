@@ -562,6 +562,14 @@ def build_rows(stats, odds_lookup, weather, injuries, injuries_by_team):
     team_totals = stats.get("team_position_totals", {})
 
     carry_shares = rb_carry_shares(stats)
+    # Each team's lead back = the RB with the biggest share of its RB carries
+    # (for the 10+ point favorite rule, see BLOWOUT_FAV in the page script).
+    lead_rb = {}
+    for pid, inf in stats["players"].items():
+        if inf.get("position") == "RB" and pid in carry_shares:
+            cur = lead_rb.get(inf["team"])
+            if cur is None or carry_shares[pid] > carry_shares[cur]:
+                lead_rb[inf["team"]] = pid
     for player_id, info in stats["players"].items():
         player_name = info.get("name", player_id)
         pos = info["position"]
@@ -672,6 +680,7 @@ def build_rows(stats, odds_lookup, weather, injuries, injuries_by_team):
                         pos, stat_col, player_id, info["team"], opp, injuries_by_team, carry_shares
                     ),
                     "trade_flags": compute_trade_flags(player_id, pos, info["team"], stats.get("trades")),
+                    "rb_lead": pos == "RB" and lead_rb.get(info["team"]) == player_id,
                 }
             )
     return rows
@@ -2431,6 +2440,7 @@ function weatherClass(r) {{
 // Out/Doubtful (the strong 🩹 entries), or Trevor's own ⚠️ flag from the
 // player popup (MARKS 'role|WEEK|player|team' = 'flux', synced like marks).
 // Any of these keeps a row from being a MUST BET (held at 3).
+const BLOWOUT_FAV = 10; // team favored by this many or more -> no lead-RB rush Overs
 const ROLE_INJURY_POSITIONS = new Set(['QB', 'RB', 'HB', 'FB', 'WR', 'TE']);
 function roleKey(r) {{ return 'role|' + WEEK + '|' + r.player + '|' + r.team; }}
 // Heads-up only (2026-10-16): a real-role teammate who is Questionable or
@@ -3481,14 +3491,22 @@ function enrichRow(r, weeks, defCache) {{
   // stars"), instead of holding it at 3.
   const roleChanges = roleChangeReasons(r);
   const roleCapped = false;
-  let demoteWhy = null, demotedFrom = 0;
+  let demoteWhy = null, demotedFrom = 0, blowoutFlag = false;
   {{
     const lvlNow = Math.max(hotLevel, coldLevel);
     const sideNow = hotLevel > coldLevel ? 'over' : 'under';
     const icon = sideNow === 'over' ? '🔥' : '🧊';
     const was = lvlNow === 4 ? 'a MUST BET' : icon.repeat(lvlNow);
     const consLine = (SIGNAL_MODE === 'consistency' && cons) ? ` He cleared ${{cons.side}} ${{cons.line}} in ${{fmtHit(cons.pHits, cons.pGames)}}; ${{r.opponent}} allowed it in ${{fmtHit(cons.dHits, cons.dGames)}}.` : '';
-    if (lvlNow >= 1 && roleChanges.length) {{
+    // Blowout rule (2026-10-16, per Trevor: "10+ point favorite as a line to
+    // say that I shouldn't be taking a rb rush over"): a big favorite's lead
+    // back often sits late, so his rush yards / rush attempts Overs aren't
+    // picks. The backup's Overs are left alone.
+    const favBy = tbTeamSpread(r, tbGame(r));
+    if (lvlNow >= 1 && r.rb_lead && (r.stat_col === 'rushing_yards' || r.stat_col === 'carries') && sideNow === 'over' && favBy !== null && favBy >= BLOWOUT_FAV) {{
+      blowoutFlag = true;
+      demoteWhy = `Blowout risk -- ${{r.team}} is favored by ${{favBy}}; lead backs often sit late in blowouts, so no rush Over (would have been ${{was}}).` + consLine;
+    }} else if (lvlNow >= 1 && roleChanges.length) {{
       demoteWhy = `Role change -- would have been ${{was}} (${{sideNow}}): ${{roleChanges.join('; ')}}.` + consLine;
     }} else if (lvlNow === 1 || lvlNow === 2) {{
       demoteWhy = `Would have been ${{was}} (${{sideNow}}) -- below the 3-star bar.` + consLine + (tierCapReason ? ` Held under 3 by ${{tierCapReason}}.` : '');
@@ -3585,7 +3603,7 @@ function enrichRow(r, weeks, defCache) {{
   // Not for ❓s caused by a role change or a matchup mismatch -- those are
   // the "don't trust it" ones.
   let ideaReason = null;
-  if (needsReview && !roleChanges.length && !mismatchFlag) {{
+  if (needsReview && !roleChanges.length && !mismatchFlag && !blowoutFlag) {{
     const why = [];
     if (demotedFrom === 2) why.push('high end: would have been a 2-star');
     if (tb && tb.script && tb.script.effect > 0) why.push(`game script supports the ${{tb.lean === 'over' ? 'Over' : 'Under'}} (${{tb.script.text}})`);

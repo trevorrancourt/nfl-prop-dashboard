@@ -3287,3 +3287,15 @@ Trevor: "put high end question marks and question marks with positive game scrip
 ## "no fair test" instead of "(-)" (2026-10-16)
 
 Trevor on Brock Bowers Rec Yds vs BUF ("why does this say over 0/4 when it has?"): BUF allowed 110/74/0/52 to all TEs, but Opp Hit scales each game to Bowers' 66.5% share (73/49/0/35), so none clear ~75.5. All four were also excused, because those offenses' usual TE output (scaled) is under 0.75× the line. The cell showed "O 0/4 (-)". When every game is excused, the cell now reads "O 0/4 (no fair test)" and the hover explains that none of the offenses BUF faced usually get near this number at his share. The math is unchanged.
+
+## Blowout rule: no lead-RB rush Overs for 10+ point favorites (2026-10-16)
+
+Trevor: "When a team is a big favorite it implies their backup running back might get more touches cause they rest the starter" (Kaelon Black SF / Jonathan Taylor IND). Discussion first:
+- 2026 data: the lead back's share of team RB carries was 58% in wins by 17+ (21 games), 71% in 7-16-point wins, 72% within 6, and 65% in losses by 7+.
+- By pre-game spread: favored 7+ → 75% (19 games); 7+ favorites won by 17+ only 2/19 times vs 11/42 for 3-6.5-point favorites; 10+ favorites 1/4. Small samples. Over many seasons the spread is the best single predictor of margin, but with about a two-touchdown spread of outcomes.
+- Opponent run defense was discussed: a soft D lets the starter get yards early, a tough D is two strikes. Trevor then chose the simple rule: "10+ point favorite as a line to say that I shouldn't be taking a rb rush over."
+
+Built:
+- `build_rows` marks `rb_lead` = each team's RB with the highest `rb_carry_shares`.
+- In `enrichRow`'s demotion block (checked first): if `BLOWOUT_FAV` (10) <= `tbTeamSpread(r, tbGame(r))`, and the row is `rb_lead` with stat_col rushing_yards or carries, Over side, and lvl ≥ 1 → ❓ "Blowout risk -- TEAM is favored by X; lead backs often sit late …". `blowoutFlag` keeps it out of 💡.
+- Tested with IND forced to -10.5: Taylor rush yds/attempts Overs → ❓ (was 🔥🔥 / MUST BET), receptions untouched by this rule, backup Seth McGowan untouched; at -6.5 no blowout reason.
