@@ -86,6 +86,12 @@ def print_quota(resp):
         print(f"    [quota] used so far: {used}, remaining: {remaining}")
 
 
+def gh_annotate(kind, title, msg):
+    """Shows a note on the GitHub Actions run page (only inside Actions)."""
+    if __import__("os").environ.get("GITHUB_ACTIONS"):
+        print(f"::{kind} title={title}::" + msg.replace("%", "%25").replace("\n", "%0A"))
+
+
 def get_with_retries(url, params, attempts=4):
     """
     GET with retries for transient connection/SSL hiccups (network blips,
@@ -206,6 +212,8 @@ def main():
     if floor and LAST_REMAINING is not None and LAST_REMAINING < floor:
         print(f"Only {LAST_REMAINING:.0f} Odds API credits left (floor {floor:.0f}) -- "
               "skipping the props pull and keeping the last saved lines.")
+        gh_annotate("warning", "Odds API credits low",
+                    f"Only {LAST_REMAINING:.0f} credits left (floor {floor:.0f}) -- lines NOT refreshed; kept the last saved lines.")
         return
 
     matching = [
@@ -240,6 +248,9 @@ def main():
     out_path = DATA_DIR / "odds_cache.json"
     out_path.write_text(json.dumps(cache, indent=2))
     print(f"Saved props for {len(all_props)} players to {out_path}")
+    gh_annotate("notice", "Odds API",
+                f"Refreshed {len(matching)} of {len(target_games)} games, {len(all_props)} players; "
+                f"credits left: {LAST_REMAINING:.0f}" if LAST_REMAINING is not None else "credits left: unknown")
 
 
 if __name__ == "__main__":
