@@ -3334,3 +3334,11 @@ Trevor: "can we make a way to give some significance to defenses that allow stat
 - Trevor picked option 2 of 3 (tag only / ❓ → 💡 / 2-star → 3-star): `outlierDefense()`, `OUTLIER_DEF_TOP = 3`, `OUTLIER_DEF_STATS` = RB|rushing_yards, WR|receptions, TE|receptions. 🎯 next to Opp Rank (hover says which side); a ❓ whose lean matches gets the 💡 reason "🎯 outlier defense: MIA allows the 3rd most this season (7.3/game)". The Under mirror (3 stingiest) wasn't backtested separately.
 - Week 8 board: 57 rows tagged. Tested with simulated lines: Hunter Henry Rec O3.5 vs MIA ❓ → 💡.
 - Same day, Trevor asked which defenses stand out now. Season z ≥ 2 included DET vs TEs (9.3 rec/g vs 5.5, +70%) and vs QBs (312 pass yds vs 236), SF vs RB receiving (7.0 rec vs 4.4), JAX vs WR yds (210 vs 149); the stingy end included JAX vs RB rush (52 vs 92), SEA vs WR yds and QB pass yds.
+
+## 🎯 + "line looks low" 💡, and ⬆ alt-line ideas (2026-10-30)
+
+Trevor: "i fel like outliers should give more of a bump when lines seem low." Offered straight-to-3-star vs 💡-first; he said "yeah i like that" to the 💡-first pick. Then: "if a projection is over and like way over the line, you could suggest an alternate line".
+
+- `outlierValue`: 🎯 defense + Anticipated (share × what this defense allows, last-4) ≥ 1.2× the line (≤ line/1.2 for Unders) → 💡 with "🎯 line looks low for this matchup", including rows with no signal. Not for role-change/mismatch/blowout rows or existing 3-star/MUST rows. Simulated: Hockenson TE Rec at 3.5 vs DET (projects 6.2) → 💡.
+- `altLineInfo`: Anticipated ≥ 1.25× the line (or ≤ line/1.25), steps of 5 (yards) or 1 (counts), picks the furthest line short of the projection that he cleared in ≥75% of the selected games (3+). Shown as "⬆ Alt O 65.5" with a hover. Simulated: Drake London line 60.5, projects 85.6, games 66/62/118/96 → Alt O 65.5 (3 of 4). Context only; no alt odds pulled.
+- Neither was backtestable (no historical prop lines). Grade them before promoting.

@@ -2450,6 +2450,7 @@ const BLOWOUT_FAV = 10; // team favored by this many or more -> no lead-RB rush 
 // gave RB rush yds 54% vs 47% (ranks 4-10), WR receptions 48% vs 44%; no
 // edge for QB pass yds, RB rec yds or TE yds. A ❓ facing one on its side -> 💡.
 const OUTLIER_DEF_TOP = 3;
+const OUTLIER_VALUE_RATIO = 1.2; // 🎯 + Anticipated 20%+ past the line -> 💡 even with no signal
 const OUTLIER_DEF_STATS = new Set(['RB|rushing_yards', 'WR|receptions', 'TE|receptions']);
 const _seasonDefRanks = {{}};
 function outlierDefense(r) {{
@@ -2706,6 +2707,41 @@ function ladderInfo(r) {{
     week: r.game_weeks ? r.game_weeks[bestIdx] : null,
     opponent: r.game_opponents ? r.game_opponents[bestIdx] : null,
   }};
+}}
+
+// Alt-line idea (2026-10-30, per Trevor: "if a projection is over and like
+// way over the line, you could suggest an alternate line"). No alt-line
+// odds are pulled (they'd cost extra Odds API credits), so this only
+// suggests a number to look up at the book: Anticipated is 25%+ past the
+// line, and the alt line is the furthest step (5 for yards, 1 for counts)
+// that stays short of the projection and that he cleared in 75%+ of the
+// selected games (3+ games).
+const ALT_PROJ_RATIO = 1.25;
+const ALT_HIT_RATE = 0.75;
+function altLineInfo(r, weeks, proj, line) {{
+  if (proj === null || line === null || line === undefined || !r.game_log || !r.game_weeks) return null;
+  const vals = [];
+  for (let i = 0; i < r.game_log.length; i++) if (weeks.has(r.game_weeks[i]) && r.game_weeks[i] < WEEK) vals.push(r.game_log[i]);
+  if (vals.length < 3) return null;
+  const step = /yards/.test(r.stat_col) ? 5 : 1;
+  const over = proj >= line * ALT_PROJ_RATIO && proj - line >= step;
+  const under = line > step && proj <= line / ALT_PROJ_RATIO && line - proj >= step;
+  if (!over && !under) return null;
+  let best = null;
+  for (let k = 1; k < 20; k++) {{
+    const L = over ? line + k * step : line - k * step;
+    if (over ? L >= proj : (L <= proj || L <= 0)) break;
+    const hits = vals.filter(v => over ? v > L : v < L).length;
+    if (hits / vals.length >= ALT_HIT_RATE) best = {{ side: over ? 'over' : 'under', line: L, hits, n: vals.length }};
+  }}
+  return best ? Object.assign(best, {{ proj }}) : null;
+}}
+function altLineTag(r) {{
+  const a = r.alt_line;
+  if (!a) return '';
+  const sideWord = a.side === 'over' ? 'Over' : 'Under';
+  const title = `Alt-line idea: projects ${{a.proj}} vs the ${{r.best_line ?? r.vegas_line}} line, and he went ${{a.side === 'over' ? 'over' : 'under'}} ${{a.line}} in ${{a.hits}} of ${{a.n}} selected games. Look up the ${{sideWord}} ${{a.line}} alt line at the book -- no alt odds are pulled here, so check the price.`;
+  return ` <span class="cov-tag" title="${{escapeHtml(title)}}">${{a.side === 'over' ? '&#11014;' : '&#11015;'}} Alt ${{a.side === 'over' ? 'O' : 'U'}} ${{a.line}}</span>`;
 }}
 
 function ladderTag(r) {{
@@ -3637,14 +3673,26 @@ function enrichRow(r, weeks, defCache) {{
   // the "don't trust it" ones.
   let ideaReason = null;
   const outlierDef = outlierDefense(r);
+  // 🎯 + the line looks low (2026-10-30, per Trevor: "outliers should give
+  // more of a bump when lines seem low"; he chose 💡 first, 3-star later
+  // only if it wins): Anticipated 20%+ past the line on the 🎯 side. Also
+  // lifts a row with no signal at all to 💡.
+  let outlierValue = null;
+  if (outlierDef && anticipated !== null && lineForAnc) {{
+    const ok = outlierDef.side === 'over' ? anticipated >= lineForAnc * OUTLIER_VALUE_RATIO : anticipated <= lineForAnc / OUTLIER_VALUE_RATIO;
+    if (ok) outlierValue = `🎯 line looks low for this matchup: projects ${{anticipated}} vs ${{lineForAnc}} (${{outlierDef.text}})`.replace('looks low', outlierDef.side === 'over' ? 'looks low' : 'looks high');
+  }}
   if (backupBlowout) {{
     ideaReason = `blowout upside on the Over: ${{r.team}} favored by ${{tbTeamSpread(r, tbGame(r))}} -- an upside bet, not a consistency pick`;
   }} else if (needsReview && !roleChanges.length && !mismatchFlag && !blowoutFlag) {{
     const why = [];
     if (demotedFrom === 2) why.push('high end: would have been a 2-star');
     if (tb && tb.script && tb.script.effect > 0) why.push(`game script supports the ${{tb.lean === 'over' ? 'Over' : 'Under'}} (${{tb.script.text}})`);
-    if (outlierDef && tb && tb.lean === outlierDef.side) why.push(`🎯 outlier defense: ${{outlierDef.text}}`);
+    if (outlierValue) why.push(outlierValue);
+    else if (outlierDef && tb && tb.lean === outlierDef.side) why.push(`🎯 outlier defense: ${{outlierDef.text}}`);
     if (why.length) ideaReason = why.join('; ');
+  }} else if (outlierValue && !needsReview && !demoteWhy && hotLevel === 0 && coldLevel === 0 && !roleChanges.length && !mismatchFlag && !blowoutFlag) {{
+    ideaReason = outlierValue;
   }}
 
   return Object.assign({{}}, r, derived, {{
@@ -3659,6 +3707,8 @@ function enrichRow(r, weeks, defCache) {{
     needs_review: needsReview,
     idea_reason: ideaReason,
     outlier_def: outlierDef,
+    outlier_value: outlierValue,
+    alt_line: altLineInfo(r, weeks, anticipated, lineForAnc),
     review_reason: demoteWhy || ((SIGNAL_MODE === 'consistency' && needsReview) ? consReviewReason : reviewReason),
     hot_level: hotLevel,
     cold_level: coldLevel,
@@ -3748,8 +3798,8 @@ function render() {{
     // (↳) rows in the grouped-by-player view -- an RB's rushing row and
     // receiving row can have different impacts.
     const idCell = sameAsPrev
-      ? '<span class="muted">&rdsh;</span>' + impactTags(r)
-      : r.player + injuryTag(r) + impactTags(r) + ladderTag(r);
+      ? '<span class="muted">&rdsh;</span>' + impactTags(r) + altLineTag(r)
+      : r.player + injuryTag(r) + impactTags(r) + ladderTag(r) + altLineTag(r);
     const idClass = sameAsPrev ? 'grouped-cell' : '';
     html += `
     <tr class="${{groupingActive && isLastOfGroup ? 'group-end' : ''}}" data-player="${{escapeHtml(r.player)}}">
@@ -5106,7 +5156,8 @@ function myRulesHtml() {{
       '<b>&#11088; MUST BET</b> -- bet it. He cleared the line in every game and the defense allowed it in every game (' + CONS_MUST_MIN_GAMES + '+ games each), against one of the ' + MUST_BET_MATCHUP_TOP + ' defenses allowing the most (Over) / least (Under) of that stat.',
       '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
       '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
-      '<b>🎯 Outlier defense:</b> one of the ' + OUTLIER_DEF_TOP + ' defenses allowing the most (or least) for the whole season, for RB Rush Yds and WR/TE Receptions only (where it held up in 2019-2025 tests). Shown next to Opp Rank; turns a ❓ on that side into 💡, never a 3-star.',
+      '<b>🎯 Outlier defense:</b> one of the ' + OUTLIER_DEF_TOP + ' defenses allowing the most (or least) for the whole season, for RB Rush Yds and WR/TE Receptions only (where it held up in 2019-2025 tests). Shown next to Opp Rank; turns a ❓ on that side into 💡, never a 3-star. If the line also looks off for that matchup (Anticipated ' + Math.round((OUTLIER_VALUE_RATIO - 1) * 100) + '%+ past it), even a row with no signal becomes 💡.',
+      '<b>⬆ Alt line idea:</b> when Anticipated is ' + Math.round((ALT_PROJ_RATIO - 1) * 100) + '%+ past the line, the furthest alt line (steps of 5 yards or 1 catch/carry) short of the projection that he cleared in ' + Math.round(ALT_HIT_RATE * 100) + '%+ of the selected games. A number to look up -- alt odds aren\u2019t pulled, so check the price.',
       '<b>&#10067;</b> -- everything else worth a glance. Hover any ❓ for exactly why it isn’t a pick.',
     ])
     + sec('What counts', [
