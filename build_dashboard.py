@@ -931,6 +931,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="Only show rows with a &#129692; Ladder badge -- QB Pass/Rush Yds, RB Rush/Rec Yds, and WR/TE Rec Yds rows where the player's best game this season already cleared 2x their current line (line must be at least 30 to qualify).">
       <input type="checkbox" id="ladderOnlyFilter"> &#129692; Ladder only
     </label>
+    <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="Only show rows with a &#11014;/&#11015; Alt line idea: the projection is 25%+ past the line, and he cleared the suggested alt line in 75%+ of the selected games. Shows them even when Hide &#10067; is ticked. Fun for parlays -- alt odds aren't pulled, so check the price at the book.">
+      <input type="checkbox" id="altOnlyFilter"> &#11014; Alt lines only
+    </label>
     <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="Only show rows where the upcoming opponent ranks 20th-32nd against this position/stat (bottom third of the league, i.e. they give up a lot of it) -- same Opp Rank number already shown in its own column, just filtered down to the weak end. Combine this with &#129692; Ladder only to find players who've proven they can blow past their line AND are facing a defense that makes it easier to do again.">
       <input type="checkbox" id="weakMatchupFilter"> Weak matchup only (Rank 20+)
     </label>
@@ -1007,6 +1010,7 @@ let activeGame = "ALL";
 let hideMarkedX = true; // starts ticked on every load (2026-10-16, per Trevor)
 let hideReview = false;
 let ladderOnly = false;
+let altOnly = false; // ⬆ Alt lines only (2026-10-30, per Trevor: "make a filter for the alts. would be a fun thing to parlay")
 let weakMatchupOnly = false;
 let strongMatchupOnly = false;
 
@@ -3779,7 +3783,8 @@ function render() {{
       (activeStat === 'ALL' || r.stat_label === activeStat) &&
       (activeGame === 'ALL' || gameKey(r) === activeGame) &&
       (!hideMarkedX || MARKS[markKey(r)] !== 'pass') &&
-      (!hideReview || !r.needs_review || r.idea_reason) && // Hide ❓ keeps 💡
+      (!hideReview || !r.needs_review || r.idea_reason || altOnly) && // Hide ❓ keeps 💡 (and alt-line rows when that filter is on)
+      (!altOnly || r.alt_line) &&
       (!ladderOnly || ladderInfo(r) !== null) &&
       (!weakMatchupOnly || isWeakMatchup(r)) &&
       (!strongMatchupOnly || isStrongMatchup(r)) &&
@@ -4313,6 +4318,7 @@ const FILTER_BOXES = {{
   hideMarkedX: v => {{ hideMarkedX = v; }},
   hideReview: v => {{ hideReview = v; }},
   ladderOnlyFilter: v => {{ ladderOnly = v; }},
+  altOnlyFilter: v => {{ altOnly = v; }},
   weakMatchupFilter: v => {{ weakMatchupOnly = v; }},
   strongMatchupFilter: v => {{ strongMatchupOnly = v; }},
 }};
@@ -4345,6 +4351,11 @@ document.getElementById('hideMarkedX').addEventListener('change', (e) => {{
 
 document.getElementById('ladderOnlyFilter').addEventListener('change', (e) => {{
   ladderOnly = e.target.checked;
+  render();
+}});
+
+document.getElementById('altOnlyFilter').addEventListener('change', (e) => {{
+  altOnly = e.target.checked;
   render();
 }});
 
@@ -5165,7 +5176,7 @@ function myRulesHtml() {{
       '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
       '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
       '<b>🎯 Outlier defense:</b> one of the ' + OUTLIER_DEF_TOP + ' defenses allowing the most (or least) for the whole season, for RB Rush Yds and WR/TE Receptions only (where it held up in 2019-2025 tests). Shown as 🎯 O / 🎯 U next to the player name; turns a ❓ on that side into 💡, never a 3-star. If the line also looks off for that matchup (Anticipated ' + Math.round((OUTLIER_VALUE_RATIO - 1) * 100) + '%+ past it), even a row with no signal becomes 💡.',
-      '<b>⬆ Alt line idea:</b> when Anticipated is ' + Math.round((ALT_PROJ_RATIO - 1) * 100) + '%+ past the line, the furthest alt line (steps of 5 yards or 1 catch/carry) short of the projection that he cleared in ' + Math.round(ALT_HIT_RATE * 100) + '%+ of the selected games. A number to look up -- alt odds aren\u2019t pulled, so check the price.',
+      '<b>⬆ Alt line idea:</b> when Anticipated is ' + Math.round((ALT_PROJ_RATIO - 1) * 100) + '%+ past the line, the furthest alt line (steps of 5 yards or 1 catch/carry) short of the projection that he cleared in ' + Math.round(ALT_HIT_RATE * 100) + '%+ of the selected games. A number to look up -- alt odds aren\u2019t pulled, so check the price. The \u2b06 Alt lines only box shows just these.',
       '<b>&#10067;</b> -- everything else worth a glance. Hover any ❓ for exactly why it isn’t a pick.',
     ])
     + sec('What counts', [
