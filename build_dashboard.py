@@ -2443,6 +2443,32 @@ function weatherClass(r) {{
 // player popup (MARKS 'role|WEEK|player|team' = 'flux', synced like marks).
 // Any of these keeps a row from being a MUST BET (held at 3).
 const BLOWOUT_FAV = 10; // team favored by this many or more -> no lead-RB rush Overs
+// 🎯 outlier defense (2026-10-30, per Trevor: "give some significance to
+// defenses that allow statistically significant amounts"). Top/bottom 3 on
+// the full season (season-long ranks predicted better than last 4 in a
+// 2019-2025 backtest), only for stats where it held up: top-3 soft defenses
+// gave RB rush yds 54% vs 47% (ranks 4-10), WR receptions 48% vs 44%; no
+// edge for QB pass yds, RB rec yds or TE yds. A ❓ facing one on its side -> 💡.
+const OUTLIER_DEF_TOP = 3;
+const OUTLIER_DEF_STATS = new Set(['RB|rushing_yards', 'WR|receptions', 'TE|receptions']);
+const _seasonDefRanks = {{}};
+function outlierDefense(r) {{
+  const key = r.position + '|' + r.stat_col;
+  if (!OUTLIER_DEF_STATS.has(key)) return null;
+  if (!_seasonDefRanks[key]) {{
+    const all = new Set();
+    for (let w = 1; w < WEEK; w++) all.add(w);
+    _seasonDefRanks[key] = rankDefenses(key, all);
+  }}
+  const {{ avgs, ranks }} = _seasonDefRanks[key];
+  const rk = ranks[r.opponent];
+  if (rk === undefined) return null;
+  const n = Object.keys(ranks).length;
+  const avg = avgs[r.opponent] === null ? '' : ` (${{avgs[r.opponent].toFixed(1)}}/game)`;
+  if (rk > n - OUTLIER_DEF_TOP) return {{ side: 'over', text: `${{r.opponent}} allows the ${{n - rk + 1 === 1 ? 'most' : (n - rk + 1) + (n - rk + 1 === 2 ? 'nd' : 'rd') + ' most'}} this season${{avg}}` }};
+  if (rk <= OUTLIER_DEF_TOP) return {{ side: 'under', text: `${{r.opponent}} allows the ${{rk === 1 ? 'least' : rk + (rk === 2 ? 'nd' : 'rd') + ' least'}} this season${{avg}}` }};
+  return null;
+}}
 const ROLE_INJURY_POSITIONS = new Set(['QB', 'RB', 'HB', 'FB', 'WR', 'TE']);
 function roleKey(r) {{ return 'role|' + WEEK + '|' + r.player + '|' + r.team; }}
 // Heads-up only (2026-10-16): a real-role teammate who is Questionable or
@@ -3610,12 +3636,14 @@ function enrichRow(r, weeks, defCache) {{
   // Not for ❓s caused by a role change or a matchup mismatch -- those are
   // the "don't trust it" ones.
   let ideaReason = null;
+  const outlierDef = outlierDefense(r);
   if (backupBlowout) {{
     ideaReason = `blowout upside on the Over: ${{r.team}} favored by ${{tbTeamSpread(r, tbGame(r))}} -- an upside bet, not a consistency pick`;
   }} else if (needsReview && !roleChanges.length && !mismatchFlag && !blowoutFlag) {{
     const why = [];
     if (demotedFrom === 2) why.push('high end: would have been a 2-star');
     if (tb && tb.script && tb.script.effect > 0) why.push(`game script supports the ${{tb.lean === 'over' ? 'Over' : 'Under'}} (${{tb.script.text}})`);
+    if (outlierDef && tb && tb.lean === outlierDef.side) why.push(`🎯 outlier defense: ${{outlierDef.text}}`);
     if (why.length) ideaReason = why.join('; ');
   }}
 
@@ -3630,6 +3658,7 @@ function enrichRow(r, weeks, defCache) {{
     cold: cold,
     needs_review: needsReview,
     idea_reason: ideaReason,
+    outlier_def: outlierDef,
     review_reason: demoteWhy || ((SIGNAL_MODE === 'consistency' && needsReview) ? consReviewReason : reviewReason),
     hot_level: hotLevel,
     cold_level: coldLevel,
@@ -3732,7 +3761,7 @@ function render() {{
       <td class="stat-cell">${{r.stat_label}}</td>
       <td>${{fmt(r.recent_avg)}}</td>
       <td>${{fmt(r.def_avg_allowed)}}</td>
-      <td ${{rankStyle(r.def_rank, r.def_rank_max)}}>${{fmt(r.def_rank)}}</td>
+      <td ${{rankStyle(r.def_rank, r.def_rank_max)}}>${{fmt(r.def_rank)}}${{r.outlier_def ? ` <span title="🎯 Outlier defense: ${{escapeHtml(r.outlier_def.text)}} -- favors the ${{r.outlier_def.side === 'over' ? 'Over' : 'Under'}}">🎯</span>` : ''}}</td>
       <td>${{hitCellHtml(r, 'p')}}</td>
       <td>${{hitCellHtml(r, 'd')}}</td>
       <td>${{fmt(r.share, '%')}}</td>
@@ -3878,7 +3907,7 @@ function openPlayerModal(playerName) {{
       <td>${{r.stat_label}}${{impactTags(r)}}</td>
       <td>${{fmt(r.recent_avg)}}</td>
       <td>${{fmt(r.def_avg_allowed)}}</td>
-      <td ${{rankStyle(r.def_rank, r.def_rank_max)}}>${{fmt(r.def_rank)}}</td>
+      <td ${{rankStyle(r.def_rank, r.def_rank_max)}}>${{fmt(r.def_rank)}}${{r.outlier_def ? ` <span title="🎯 Outlier defense: ${{escapeHtml(r.outlier_def.text)}} -- favors the ${{r.outlier_def.side === 'over' ? 'Over' : 'Under'}}">🎯</span>` : ''}}</td>
       <td>${{hitCellHtml(r, 'p')}}</td>
       <td>${{hitCellHtml(r, 'd')}}</td>
       <td>${{fmt(r.share, '%')}}</td>
@@ -5076,7 +5105,8 @@ function myRulesHtml() {{
   return sec('The groups', [
       '<b>&#11088; MUST BET</b> -- bet it. He cleared the line in every game and the defense allowed it in every game (' + CONS_MUST_MIN_GAMES + '+ games each), against one of the ' + MUST_BET_MATCHUP_TOP + ' defenses allowing the most (Over) / least (Under) of that stat.',
       '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
-      '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, or a backup RB with blowout upside.',
+      '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
+      '<b>🎯 Outlier defense:</b> one of the ' + OUTLIER_DEF_TOP + ' defenses allowing the most (or least) for the whole season, for RB Rush Yds and WR/TE Receptions only (where it held up in 2019-2025 tests). Shown next to Opp Rank; turns a ❓ on that side into 💡, never a 3-star.',
       '<b>&#10067;</b> -- everything else worth a glance. Hover any ❓ for exactly why it isn’t a pick.',
     ])
     + sec('What counts', [

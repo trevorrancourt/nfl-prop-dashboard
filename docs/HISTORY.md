@@ -3324,3 +3324,13 @@ Trevor asked whether the blowout logic holds up ("Does the data support that"). 
 - Lead back at 10+: carries Under 55% (so Overs 45%), mild support for "no lead rush Over". Rush yards 50/50.
 - The "2 of 19" blowout figure was 2026 only; over 7 seasons, 7-9.5 favorites won by 17+ 30% of the time and 10+ favorites 37%.
 - Verdict told to Trevor: the effect is real but mild. It supports a heads-up or a ❓, not betting the backup Over as a strong pick. No logic changed.
+
+## 🎯 Outlier defense tier (2026-10-30)
+
+Trevor: "can we make a way to give some significance to defenses that allow statistically significant amounts over to certain positions? like the most allowed if there is a higher tier". Backtested first (`scripts/backtest_outlier_defense.py` + `_players.py`, nflverse 2019-2025, weeks 6-18, defense ranked on prior games):
+
+- What the defense allowed the next week vs league average, ranked on **season** games: top 3 +8.4%, ranks 4-10 +3.9%, 11-22 +0.3%, bottom 10 -5.6%. z ≥ 2: +10.7%. Ranked on the **last 4** games the spread was smaller (top 3 +6.7%), so season ranks are used.
+- Player beat his own season average: top 3 46.4%, 4-5 43.5%, 6-10 44.0%, 11-22 40.7%, 23-32 37.9%. By stat (top 3 vs 4-10): RB rush yds 53.7 vs 47.0, WR receptions 48.4 vs 44.0, TE receptions 46.7 vs 42.7; QB pass yds 50.5 vs 54.5 (reversed), RB rec yds and TE yds flat.
+- Trevor picked option 2 of 3 (tag only / ❓ → 💡 / 2-star → 3-star): `outlierDefense()`, `OUTLIER_DEF_TOP = 3`, `OUTLIER_DEF_STATS` = RB|rushing_yards, WR|receptions, TE|receptions. 🎯 next to Opp Rank (hover says which side); a ❓ whose lean matches gets the 💡 reason "🎯 outlier defense: MIA allows the 3rd most this season (7.3/game)". The Under mirror (3 stingiest) wasn't backtested separately.
+- Week 8 board: 57 rows tagged. Tested with simulated lines: Hunter Henry Rec O3.5 vs MIA ❓ → 💡.
+- Same day, Trevor asked which defenses stand out now. Season z ≥ 2 included DET vs TEs (9.3 rec/g vs 5.5, +70%) and vs QBs (312 pass yds vs 236), SF vs RB receiving (7.0 rec vs 4.4), JAX vs WR yds (210 vs 149); the stingy end included JAX vs RB rush (52 vs 92), SEA vs WR yds and QB pass yds.
