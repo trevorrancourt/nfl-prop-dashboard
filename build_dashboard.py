@@ -2736,6 +2736,14 @@ function altLineInfo(r, weeks, proj, line) {{
   }}
   return best ? Object.assign(best, {{ proj }}) : null;
 }}
+// 🎯 next to the player name (moved from the narrow Opp Rank cell on
+// 2026-10-30 -- Trevor couldn't see it there).
+function outlierTag(r) {{
+  const o = r.outlier_def;
+  if (!o) return '';
+  const title = `🎯 Outlier defense: ${{o.text}} -- favors the ${{o.side === 'over' ? 'Over' : 'Under'}}` + (r.outlier_value ? `. ${{r.outlier_value}}` : '');
+  return ` <span class="cov-tag" title="${{escapeHtml(title)}}">&#127919; ${{o.side === 'over' ? 'O' : 'U'}}</span>`;
+}}
 function altLineTag(r) {{
   const a = r.alt_line;
   if (!a) return '';
@@ -3798,8 +3806,8 @@ function render() {{
     // (↳) rows in the grouped-by-player view -- an RB's rushing row and
     // receiving row can have different impacts.
     const idCell = sameAsPrev
-      ? '<span class="muted">&rdsh;</span>' + impactTags(r) + altLineTag(r)
-      : r.player + injuryTag(r) + impactTags(r) + ladderTag(r) + altLineTag(r);
+      ? '<span class="muted">&rdsh;</span>' + impactTags(r) + outlierTag(r) + altLineTag(r)
+      : r.player + injuryTag(r) + impactTags(r) + ladderTag(r) + outlierTag(r) + altLineTag(r);
     const idClass = sameAsPrev ? 'grouped-cell' : '';
     html += `
     <tr class="${{groupingActive && isLastOfGroup ? 'group-end' : ''}}" data-player="${{escapeHtml(r.player)}}">
@@ -3811,7 +3819,7 @@ function render() {{
       <td class="stat-cell">${{r.stat_label}}</td>
       <td>${{fmt(r.recent_avg)}}</td>
       <td>${{fmt(r.def_avg_allowed)}}</td>
-      <td ${{rankStyle(r.def_rank, r.def_rank_max)}}>${{fmt(r.def_rank)}}${{r.outlier_def ? ` <span title="🎯 Outlier defense: ${{escapeHtml(r.outlier_def.text)}} -- favors the ${{r.outlier_def.side === 'over' ? 'Over' : 'Under'}}">🎯</span>` : ''}}</td>
+      <td ${{rankStyle(r.def_rank, r.def_rank_max)}}>${{fmt(r.def_rank)}}</td>
       <td>${{hitCellHtml(r, 'p')}}</td>
       <td>${{hitCellHtml(r, 'd')}}</td>
       <td>${{fmt(r.share, '%')}}</td>
@@ -3957,7 +3965,7 @@ function openPlayerModal(playerName) {{
       <td>${{r.stat_label}}${{impactTags(r)}}</td>
       <td>${{fmt(r.recent_avg)}}</td>
       <td>${{fmt(r.def_avg_allowed)}}</td>
-      <td ${{rankStyle(r.def_rank, r.def_rank_max)}}>${{fmt(r.def_rank)}}${{r.outlier_def ? ` <span title="🎯 Outlier defense: ${{escapeHtml(r.outlier_def.text)}} -- favors the ${{r.outlier_def.side === 'over' ? 'Over' : 'Under'}}">🎯</span>` : ''}}</td>
+      <td ${{rankStyle(r.def_rank, r.def_rank_max)}}>${{fmt(r.def_rank)}}</td>
       <td>${{hitCellHtml(r, 'p')}}</td>
       <td>${{hitCellHtml(r, 'd')}}</td>
       <td>${{fmt(r.share, '%')}}</td>
@@ -5156,7 +5164,7 @@ function myRulesHtml() {{
       '<b>&#11088; MUST BET</b> -- bet it. He cleared the line in every game and the defense allowed it in every game (' + CONS_MUST_MIN_GAMES + '+ games each), against one of the ' + MUST_BET_MATCHUP_TOP + ' defenses allowing the most (Over) / least (Under) of that stat.',
       '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
       '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
-      '<b>🎯 Outlier defense:</b> one of the ' + OUTLIER_DEF_TOP + ' defenses allowing the most (or least) for the whole season, for RB Rush Yds and WR/TE Receptions only (where it held up in 2019-2025 tests). Shown next to Opp Rank; turns a ❓ on that side into 💡, never a 3-star. If the line also looks off for that matchup (Anticipated ' + Math.round((OUTLIER_VALUE_RATIO - 1) * 100) + '%+ past it), even a row with no signal becomes 💡.',
+      '<b>🎯 Outlier defense:</b> one of the ' + OUTLIER_DEF_TOP + ' defenses allowing the most (or least) for the whole season, for RB Rush Yds and WR/TE Receptions only (where it held up in 2019-2025 tests). Shown as 🎯 O / 🎯 U next to the player name; turns a ❓ on that side into 💡, never a 3-star. If the line also looks off for that matchup (Anticipated ' + Math.round((OUTLIER_VALUE_RATIO - 1) * 100) + '%+ past it), even a row with no signal becomes 💡.',
       '<b>⬆ Alt line idea:</b> when Anticipated is ' + Math.round((ALT_PROJ_RATIO - 1) * 100) + '%+ past the line, the furthest alt line (steps of 5 yards or 1 catch/carry) short of the projection that he cleared in ' + Math.round(ALT_HIT_RATE * 100) + '%+ of the selected games. A number to look up -- alt odds aren\u2019t pulled, so check the price.',
       '<b>&#10067;</b> -- everything else worth a glance. Hover any ❓ for exactly why it isn’t a pick.',
     ])
