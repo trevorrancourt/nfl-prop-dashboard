@@ -3342,3 +3342,5 @@ Trevor: "i fel like outliers should give more of a bump when lines seem low." Of
 - `outlierValue`: 🎯 defense + Anticipated (share × what this defense allows, last-4) ≥ 1.2× the line (≤ line/1.2 for Unders) → 💡 with "🎯 line looks low for this matchup", including rows with no signal. Not for role-change/mismatch/blowout rows or existing 3-star/MUST rows. Simulated: Hockenson TE Rec at 3.5 vs DET (projects 6.2) → 💡.
 - `altLineInfo`: Anticipated ≥ 1.25× the line (or ≤ line/1.25), steps of 5 (yards) or 1 (counts), picks the furthest line short of the projection that he cleared in ≥75% of the selected games (3+). Shown as "⬆ Alt O 65.5" with a hover. Simulated: Drake London line 60.5, projects 85.6, games 66/62/118/96 → Alt O 65.5 (3 of 4). Context only; no alt odds pulled.
 - Neither was backtestable (no historical prop lines). Grade them before promoting.
+
+**Follow-up (2026-10-30):** after Trevor asked about Derrick Henry's "74.5" (an alt Under: projects 54, last 4 games 45/58/102/73), he said "you can't bet alt unders", so `altLineInfo` now suggests Over alts only.

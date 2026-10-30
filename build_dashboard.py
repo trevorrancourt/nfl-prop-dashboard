@@ -2728,9 +2728,9 @@ function altLineInfo(r, weeks, proj, line) {{
   for (let i = 0; i < r.game_log.length; i++) if (weeks.has(r.game_weeks[i]) && r.game_weeks[i] < WEEK) vals.push(r.game_log[i]);
   if (vals.length < 3) return null;
   const step = /yards/.test(r.stat_col) ? 5 : 1;
+  // Overs only (2026-10-30, per Trevor: "you can't bet alt unders").
   const over = proj >= line * ALT_PROJ_RATIO && proj - line >= step;
-  const under = line > step && proj <= line / ALT_PROJ_RATIO && line - proj >= step;
-  if (!over && !under) return null;
+  if (!over) return null;
   let best = null;
   for (let k = 1; k < 20; k++) {{
     const L = over ? line + k * step : line - k * step;
@@ -5176,7 +5176,7 @@ function myRulesHtml() {{
       '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
       '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
       '<b>🎯 Outlier defense:</b> one of the ' + OUTLIER_DEF_TOP + ' defenses allowing the most (or least) for the whole season, for RB Rush Yds and WR/TE Receptions only (where it held up in 2019-2025 tests). Shown as 🎯 O / 🎯 U next to the player name; turns a ❓ on that side into 💡, never a 3-star. If the line also looks off for that matchup (Anticipated ' + Math.round((OUTLIER_VALUE_RATIO - 1) * 100) + '%+ past it), even a row with no signal becomes 💡.',
-      '<b>⬆ Alt line idea:</b> when Anticipated is ' + Math.round((ALT_PROJ_RATIO - 1) * 100) + '%+ past the line, the furthest alt line (steps of 5 yards or 1 catch/carry) short of the projection that he cleared in ' + Math.round(ALT_HIT_RATE * 100) + '%+ of the selected games. A number to look up -- alt odds aren\u2019t pulled, so check the price. The \u2b06 Alt lines only box shows just these.',
+      '<b>⬆ Alt line idea (Overs only -- books don\u2019t offer alt Unders):</b> when Anticipated is ' + Math.round((ALT_PROJ_RATIO - 1) * 100) + '%+ past the line, the furthest alt line (steps of 5 yards or 1 catch/carry) short of the projection that he cleared in ' + Math.round(ALT_HIT_RATE * 100) + '%+ of the selected games. A number to look up -- alt odds aren\u2019t pulled, so check the price. The \u2b06 Alt lines only box shows just these.',
       '<b>&#10067;</b> -- everything else worth a glance. Hover any ❓ for exactly why it isn’t a pick.',
     ])
     + sec('What counts', [
