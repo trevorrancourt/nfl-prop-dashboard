@@ -3351,3 +3351,5 @@ Trevor: "if I am looking at last 4 I want the suggestions to be that, but if I c
 
 - Popups: player and defense game-by-game tables now list every played game this season (`seasonWeeks()` = 1..WEEK-1); rows in the selected weeks get `.in-window` (bold), others `.out-window` (60% opacity). DNP rows cover the whole season. Footers: "His avg, bold games (Wk 4-7, 4 games)" + "Full season avg (7 games)"; the defense popup gets "Avg allowed, bold games" + "Full season avg allowed". Opp-rank chips still use the selected weeks.
 - 📅: `consistencyStats` gained an optional `onlySide`. For rows with a signal side, the full-season check (season share, season defense ranks for excused misses) must reach 75% for both him and the defense. Simulated board: 207 signal rows, 132 with 📅 (lines were set at each player's recent-4 low, so expect fewer on real lines).
+
+**2026-10-31:** per Trevor ("get rid of the explainer text on the homepage at the top"), removed the signal legend (`pickyLabel` in consistency mode, incl. the small-sample note) and the "Rank: 1 = toughest … click a player's name" hint next to the Stat buttons. 📜 My rules covers both.

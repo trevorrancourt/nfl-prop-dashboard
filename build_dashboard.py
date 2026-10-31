@@ -950,7 +950,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <span class="muted">Stat:</span>
     <button class="stat-btn active" data-stat="ALL">All</button>
     {stat_buttons}
-    <span class="muted" style="margin-left:auto;">Rank: 1 = toughest matchup for this stat, 32 = easiest &middot; Click a player's name for their full stat card &middot; Click their Opp for that defense's card</span>
   </div>
   <div id="gameScriptPanel" class="gs-panel" style="display:none;"></div>
   <table id="tbl">
@@ -3797,7 +3796,9 @@ function render() {{
   document.getElementById('th-recent-avg').textContent = 'Avg (' + weeksLabel(selectedWeeks) + ')';
   // The How-picky slider only drives the Average-edge formula.
   if (SIGNAL_MODE === 'consistency') {{
-    document.getElementById('pickyLabel').textContent = '⭐ MUST BET = bet it: every game on both sides (4+ games), top-10 matchup  ·  🔥🔥🔥/🧊🧊🧊 = review: he cleared it every game, defense 75%+, top-10 matchup  ·  💡 = high-end ❓ (would have been 2-star) or the game script backs it  ·  ❓ = everything else worth a look (weaker hit rates, role changes, matchup questions -- hover for why)' + signalSampleNote();
+    // Legend removed 2026-10-31 per Trevor ("get rid of the explainer text
+    // on the homepage at the top") -- 📜 My rules has it.
+    document.getElementById('pickyLabel').textContent = '';
   }} else {{
     applyPickySetting();
   }}
