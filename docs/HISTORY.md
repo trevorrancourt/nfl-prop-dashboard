@@ -3361,3 +3361,14 @@ Trevor: "Is there something I could build to show like what I should be taking a
 - Implementation and constants: see CLAUDE.md. Sanity: Poisson mu 5.4 vs 4.5 → 62.7% over; gamma mu 70/sd 40 vs 59.5 → 53.3%.
 - Calibration notes from simulated lines (no odds in the cloud session): first version had the hit rate at full weight and Anticipated at 50% unclamped, producing 85-97% calls (e.g. McBride Rec projected 5.8 because the opponent had allowed 4.75 TE catches over 4 games). Fixed: Anticipated 35% and clamped to 0.6-1.4× his form, hit rate half weight, projection-uncertainty smear, normal sd floor sqrt(mu), 2+ selected games. With lines at each player's season median (-110 both sides) the spread is roughly: 24% negative edge, 21% 0-2%, 18% 2-4%, 16% 4-7%, 21% 7%+. Real lines are sharper than median lines, so real edges should be smaller.
 - Not graded. When weekly grading exists, check calibration (do 60% calls win ~60%?) and tune `WIN_MODEL_WEIGHT` / `WIN_HIT_WEIGHT`.
+
+## Win % model backtest (2026-10-31)
+
+Trevor asked how historical data could help; option 2 (tune the model on past seasons) → "yeah run it". `scripts/backtest_win_model.py` replays 2019-2025 (weeks 5-18) with only prior data, same projection as `winChance()`. No old prop lines, so the line is his prior season median ± 0.5 at random. 66,488 predictions, Over rate 48.9%.
+
+- **Model alone is overconfident:** said 80.6% → won 65.5%; said 21.4% → won 34.5%. Log loss 0.6989, worse than a coin flip (0.6931).
+- **Hit rate alone (shrunk, 12-game prior):** 0.6824, mildly underconfident at the ends.
+- **Board's blend (0.35 model + 0.5 hit, market = 50%):** 0.6691, already well calibrated: 52.4→52.0, 57.3→59.2, 63.9→66.4, 73.8→72.4.
+- **Fitted weights by stat** (model, hit): attempts 0.70/0.52, carries 0.67/0.27, completions 0.86/0.03, pass yds 0.69/0.00, rec yds 0.25/0.87, receptions 0.46/0.70, rush yds 0.36/0.30. QB passing hit rates add nothing; receiving hit rates add the most.
+- **Out of sample** (fit 2019-23, test 2024-25): current 0.6692 → per-stat 0.6655, with near-perfect calibration (57.3→57.2, 64.2→65.8, 75.1→74.7).
+- **Shipped:** per-stat weights ×0.75 (`WIN_WEIGHTS`), because real books know more than a median line, so these fitted weights are an upper bound. TDs, INTs and targets weren't tested and keep 0.35/0.5. My rules updated.

@@ -3433,6 +3433,17 @@ const WIN_EDGE_GOOD = 0.03;
 const WIN_EDGE_CHECK = 0.10;
 const WIN_HIT_PRIOR = 12;
 const WIN_HIT_WEIGHT = 0.5; // the model already uses the same games, so the hit rate only half-counts
+// Per-stat [model, hit] weights from the 2019-2025 backtest
+// (scripts/backtest_win_model.py, 2026-10-31): fitted on 2019-23, checked
+// on 2024-25, then x0.75 because real books know more than the backtest's
+// stand-in line (his median). QB passing and carries lean on the model
+// (their hit rates add nothing); receiving leans on the hit rate. Stats
+// not tested (TDs, INTs, targets) keep WIN_MODEL_WEIGHT / WIN_HIT_WEIGHT.
+const WIN_WEIGHTS = {{
+  passing_yards: [0.52, 0], completions: [0.64, 0], attempts: [0.53, 0.39],
+  carries: [0.5, 0.2], rushing_yards: [0.27, 0.23],
+  receptions: [0.34, 0.53], receiving_yards: [0.19, 0.65],
+}};
 const WIN_POISSON_STATS = new Set(['receptions', 'targets', 'passing_tds', 'total_tds', 'passing_interceptions', 'rushing_tds', 'receiving_tds']);
 const WIN_NORMAL_STATS = new Set(['attempts', 'completions', 'carries']);
 const WIN_YARD_CV = {{ passing_yards: 0.28, rushing_yards: 0.55, receiving_yards: 0.65 }};
@@ -3555,10 +3566,11 @@ function winChance(r, weeks, anticipated) {{
     const hits = all.filter(v => side === 'over' ? v > m.line : v < m.line).length;
     const pHit = _clampP((hits + WIN_HIT_PRIOR * pMkt) / (all.length + WIN_HIT_PRIOR));
     const pModel = _clampP(model[side]);
-    const z = _logit(pMkt) + WIN_MODEL_WEIGHT * (_logit(pModel) - _logit(pMkt)) + WIN_HIT_WEIGHT * (_logit(pHit) - _logit(pMkt));
+    const [wM, wH] = WIN_WEIGHTS[statCol] || [WIN_MODEL_WEIGHT, WIN_HIT_WEIGHT];
+    const z = _logit(pMkt) + wM * (_logit(pModel) - _logit(pMkt)) + wH * (_logit(pHit) - _logit(pMkt));
     const p = _clampP(_unlogit(z));
     const need = impliedProb(m.price);
-    const out = {{ side, line: m.line, price: m.price, book: m.book, p, need, edge: p - need, pMkt, pModel, pHit, hits, n: all.length, mu }};
+    const out = {{ side, line: m.line, price: m.price, book: m.book, p, need, edge: p - need, pMkt, pModel, pHit, hits, n: all.length, mu, wM, wH }};
     if (!best || out.edge > best.edge) best = out;
   }}
   return best;
@@ -3572,8 +3584,8 @@ function winCellHtml(r) {{
   const tip = [
     `${{w.side === 'over' ? 'Over' : 'Under'}} ${{w.line}} at ${{w.price > 0 ? '+' : ''}}${{w.price}} (${{w.book}}): estimated ${{pct(w.p)}} to win; this price needs ${{pct(w.need)}} to break even.`,
     `Market (juice removed): ${{pct(w.pMkt)}}`,
-    `Model: projects ${{Math.round(w.mu * 10) / 10}} -> ${{pct(w.pModel)}} (counts ${{Math.round(WIN_MODEL_WEIGHT * 100)}}%)`,
-    `His season at this line: ${{w.hits}} of ${{w.n}} -> ${{pct(w.pHit)}} after shrinking toward the market`,
+    `Model: projects ${{Math.round(w.mu * 10) / 10}} -> ${{pct(w.pModel)}} (counts ${{Math.round(w.wM * 100)}}%)`,
+    `His season at this line: ${{w.hits}} of ${{w.n}} -> ${{pct(w.pHit)}} after shrinking toward the market (counts ${{Math.round(w.wH * 100)}}%)`,
     'An estimate, not proven yet -- grade it before trusting it.',
     e > WIN_EDGE_CHECK * 100 ? `Over +${{WIN_EDGE_CHECK * 100}}: double-check -- news (him, his QB), and whether one book is way off the other two (a stale line can be real value).`
       : e >= WIN_EDGE_GOOD * 100 ? `+${{WIN_EDGE_GOOD * 100}} to +${{WIN_EDGE_CHECK * 100}}: the sweet spot -- if you already like it, go.`
@@ -5435,7 +5447,7 @@ function myRulesHtml() {{
       '<b>&#11088; MUST BET</b> -- bet it. He cleared the line in every game and the defense allowed it in every game (' + CONS_MUST_MIN_GAMES + '+ games each), against one of the ' + MUST_BET_MATCHUP_TOP + ' defenses allowing the most (Over) / least (Under) of that stat.',
       '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
       '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
-      '<b>Win % / Need / Edge:</b> an estimated chance to win the better side: starts from the books\u2019 odds with the juice removed, moves ' + Math.round(WIN_MODEL_WEIGHT * 100) + '% of the way toward a projection model (Poisson for catches/TDs, normal for attempts/carries, a skewed curve for yards), then nudges (half weight) for his season hit rate at that line. Need = the break-even % of the best price; Edge = the difference: green +' + WIN_EDGE_GOOD * 100 + ' to +' + WIN_EDGE_CHECK * 100 + ' (if you like it, go), amber \u26a0 over +' + WIN_EDGE_CHECK * 100 + ' (check news first), gray 0 to +' + WIN_EDGE_GOOD * 100 + ', red negative. Context only -- it doesn\u2019t change picks or alerts, and it isn\u2019t proven yet.',
+      '<b>Win % / Need / Edge:</b> an estimated chance to win the better side: starts from the books\u2019 odds with the juice removed, moves part of the way toward a projection model (Poisson for catches/TDs, normal for attempts/carries, a skewed curve for yards) and his season hit rate at that line -- how much each counts per stat was tuned on 66,000 games from 2019-2025 (e.g. QB passing leans on the projection, receiving on the hit rate). In that test, its 57% calls won 57% and its 64% calls won 66%. Need = the break-even % of the best price; Edge = the difference: green +' + WIN_EDGE_GOOD * 100 + ' to +' + WIN_EDGE_CHECK * 100 + ' (if you like it, go), amber \u26a0 over +' + WIN_EDGE_CHECK * 100 + ' (check news first), gray 0 to +' + WIN_EDGE_GOOD * 100 + ', red negative. Context only -- it doesn\u2019t change picks or alerts, and it isn\u2019t proven yet.',
       '<b>📅 Full year agrees:</b> shown next to the signal when the same side and line also holds over the whole season -- he and this defense both ' + Math.round(CONS_TIERS[1] * 100) + '%+ (after excused misses). A flag only; grades still follow the selected weeks.',
       '<b>🎯 Outlier defense:</b> one of the ' + OUTLIER_DEF_TOP + ' defenses allowing the most (or least) for the whole season, for RB Rush Yds and WR/TE Receptions only (where it held up in 2019-2025 tests). Shown as 🎯 O / 🎯 U next to the player name; turns a ❓ on that side into 💡, never a 3-star. If the line also looks off for that matchup (Anticipated ' + Math.round((OUTLIER_VALUE_RATIO - 1) * 100) + '%+ past it), even a row with no signal becomes 💡.',
       '<b>⬆ Alt line idea (Overs only -- books don\u2019t offer alt Unders):</b> when Anticipated is ' + Math.round((ALT_PROJ_RATIO - 1) * 100) + '%+ past the line, the furthest alt line (steps of 5 yards or 1 catch/carry) short of the projection that he cleared in ' + Math.round(ALT_HIT_RATE * 100) + '%+ of the selected games. A number to look up -- alt odds aren\u2019t pulled, so check the price. The \u2b06 Alt lines only box shows just these.',
