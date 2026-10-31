@@ -748,6 +748,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .opp-rank-chip.off-hi {{ background: rgba(210,153,34,0.20); color: #e0b84a; }}
   .opp-rank-chip.off-lo {{ background: rgba(79,140,255,0.18); color: #8cb4ff; }}
   .opp-rank-avg td {{ border-top: 1px solid rgba(127,127,127,0.35); }}
+  .modal-table tr.in-window td {{ font-weight: 700; }}
+  .modal-table tr.out-window td {{ opacity: 0.6; }}
   .modal-note {{ font-size: 12px; opacity: 0.7; margin: -4px 0 6px; }}
   .bet-slip {{ display: flex; gap: 4px; margin-top: 4px; }}
   .bet-slip .bet-field {{
@@ -2457,15 +2459,20 @@ const OUTLIER_DEF_TOP = 3;
 const OUTLIER_VALUE_RATIO = 1.2; // 🎯 + Anticipated 20%+ past the line -> 💡 even with no signal
 const OUTLIER_DEF_STATS = new Set(['RB|rushing_yards', 'WR|receptions', 'TE|receptions']);
 const _seasonDefRanks = {{}};
+// Every played week this season (1..WEEK-1), for full-season views.
+function seasonWeeks() {{
+  const all = new Set();
+  for (let w = 1; w < WEEK; w++) all.add(w);
+  return all;
+}}
+function seasonDefRanks(key) {{
+  if (!_seasonDefRanks[key]) _seasonDefRanks[key] = rankDefenses(key, seasonWeeks());
+  return _seasonDefRanks[key];
+}}
 function outlierDefense(r) {{
   const key = r.position + '|' + r.stat_col;
   if (!OUTLIER_DEF_STATS.has(key)) return null;
-  if (!_seasonDefRanks[key]) {{
-    const all = new Set();
-    for (let w = 1; w < WEEK; w++) all.add(w);
-    _seasonDefRanks[key] = rankDefenses(key, all);
-  }}
-  const {{ avgs, ranks }} = _seasonDefRanks[key];
+  const {{ avgs, ranks }} = seasonDefRanks(key);
   const rk = ranks[r.opponent];
   if (rk === undefined) return null;
   const n = Object.keys(ranks).length;
@@ -2740,6 +2747,14 @@ function altLineInfo(r, weeks, proj, line) {{
   }}
   return best ? Object.assign(best, {{ proj }}) : null;
 }}
+function fullYearTag(r) {{
+  const f = r.full_year;
+  if (!f || !f.ok) return '';
+  const pct = v => v === null ? '-' : Math.round(v * 100) + '%';
+  const title = `📅 Full year agrees: over the whole season (not just the selected weeks), ${{r.player}} went ${{f.side}} ${{f.line}} in ${{f.pHits}} of ${{f.pGames}} games (${{pct(f.pRate)}} after excused misses), and ${{r.opponent}}'s games at his share went ${{f.side}} in ${{f.dHits}} of ${{f.dGames}} (${{pct(f.dRate)}}). Both need ${{Math.round(CONS_TIERS[1] * 100)}}%+.`;
+  return ` <span class="cov-tag" title="${{escapeHtml(title)}}">&#128197;</span>`;
+}}
+
 // 🎯 next to the player name (moved from the narrow Opp Rank cell on
 // 2026-10-30 -- Trevor couldn't see it there).
 function outlierTag(r) {{
@@ -3309,7 +3324,7 @@ function matchupMismatch(r, cons, weeks) {{
   return null;
 }}
 
-function consistencyStats(r, weeks, sharePct, ranks) {{
+function consistencyStats(r, weeks, sharePct, ranks, onlySide) {{
   const key = r.position + '|' + r.stat_col;
   const idx = playerSelectedIndices(r, weeks);
   const games = idx.map(i => ({{ val: r.game_log[i], opp: r.game_opponents[i], week: r.game_weeks[i] }}));
@@ -3325,7 +3340,7 @@ function consistencyStats(r, weeks, sharePct, ranks) {{
   const rk = ranks || {{}};
   const nTeams = Object.keys(rk).length;
   const sides = {{}};
-  for (const side of ['over', 'under']) {{
+  for (const side of (onlySide ? [onlySide] : ['over', 'under'])) {{
     const m = bestMarketFor(r, side);
     const line = m ? m.line : r.vegas_line;
     if (line === null || line === undefined) continue;
@@ -3707,7 +3722,26 @@ function enrichRow(r, weeks, defCache) {{
     ideaReason = outlierValue;
   }}
 
+  // 📅 Full year agrees (2026-10-31, per Trevor: "if it's also supported by
+  // full year stats, it's flagged"). Same hit-rate check on every played
+  // week this season, same side and line: both him and this defense at
+  // CONS_TIERS[1] (75%)+. A flag only -- grades still follow the selected
+  // weeks. Skipped when the selection already is the full season.
+  let fullYear = null;
+  const sigSide = hotLevel > 0 ? 'over' : (coldLevel > 0 ? 'under' : ((needsReview || ideaReason) && cons ? cons.side : null));
+  if (sigSide && SIGNAL_MODE === 'consistency' && playedWeeksSelected(weeks) < WEEK - 1) {{
+    const sw = seasonWeeks();
+    const fy = consistencyStats(r, sw, deriveStats(r, sw).share, seasonDefRanks(key).ranks, sigSide);
+    if (fy && fy.pGames && fy.dGames) {{
+      fullYear = {{
+        side: sigSide, line: fy.line, ok: fy.pRate >= CONS_TIERS[1] && fy.dRate >= CONS_TIERS[1],
+        pHits: fy.pHits, pGames: fy.pGames, dHits: fy.dHits, dGames: fy.dGames, pRate: fy.pRate, dRate: fy.dRate,
+      }};
+    }}
+  }}
+
   return Object.assign({{}}, r, derived, {{
+    full_year: fullYear,
     def_avg_allowed: defAvgRounded,
     def_rank: ranks[r.opponent] === undefined ? null : ranks[r.opponent],
     def_rank_max: Object.keys(ranks).length,
@@ -3831,7 +3865,7 @@ function render() {{
       <td>${{fmt(r.anticipated)}}</td>
       <td class="${{edgeClass(r.edge_pct)}}">${{fmt(r.edge)}}</td>
       <td class="${{edgeClass(r.anc_edge_pct)}}">${{fmt(r.anc_edge)}}</td>
-      <td>${{signalEmoji(r)}}${{scriptTag(r)}}</td>
+      <td>${{signalEmoji(r)}}${{fullYearTag(r)}}${{scriptTag(r)}}</td>
       <td class="${{r.best_book === 'draftkings' ? 'best-line' : ''}}" title="${{r.best_book === 'draftkings' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.draftkings_line, bookCellPrice(r, 'draftkings'))}}</td>
       <td class="${{r.best_book === 'fanduel' ? 'best-line' : ''}}" title="${{r.best_book === 'fanduel' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.fanduel_line, bookCellPrice(r, 'fanduel'))}}</td>
       <td class="${{r.best_book === 'betmgm' ? 'best-line' : ''}}" title="${{r.best_book === 'betmgm' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.betmgm_line, bookCellPrice(r, 'betmgm'))}}</td>
@@ -3977,7 +4011,7 @@ function openPlayerModal(playerName) {{
       <td>${{fmt(r.anticipated)}}</td>
       <td class="${{edgeClass(r.edge_pct)}}">${{fmt(r.edge)}}</td>
       <td class="${{edgeClass(r.anc_edge_pct)}}">${{fmt(r.anc_edge)}}</td>
-      <td>${{signalEmoji(r)}}${{scriptTag(r)}}</td>
+      <td>${{signalEmoji(r)}}${{fullYearTag(r)}}${{scriptTag(r)}}</td>
       <td class="${{r.best_book === 'draftkings' ? 'best-line' : ''}}" title="${{r.best_book === 'draftkings' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.draftkings_line, bookCellPrice(r, 'draftkings'))}}</td>
       <td class="${{r.best_book === 'fanduel' ? 'best-line' : ''}}" title="${{r.best_book === 'fanduel' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.fanduel_line, bookCellPrice(r, 'fanduel'))}}</td>
       <td class="${{r.best_book === 'betmgm' ? 'best-line' : ''}}" title="${{r.best_book === 'betmgm' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.betmgm_line, bookCellPrice(r, 'betmgm'))}}</td>
@@ -3988,7 +4022,11 @@ function openPlayerModal(playerName) {{
   // weeks, one column per stat this player is tracked for -- i.e. exactly
   // what happened in each of those games, not just a single stat's
   // numbers in isolation.
+  // Every game this season is listed (2026-10-31, per Trevor: "show the rest
+  // of the year numbers game by game. Maybe like bold the last 4"); games in
+  // the selected weeks are bold, and the averages/ranks below still use them.
   const gameIdx = playerSelectedIndices(first, selectedWeeks);
+  const allIdx = playerSelectedIndices(first, seasonWeeks());
 
   // Explicit "DNP" rows (added 2026-09-24, after Trevor asked why Michael
   // Pittman's card had no Week 2 row): a week strictly before the
@@ -4003,10 +4041,10 @@ function openPlayerModal(playerName) {{
   // week Trevor checked ahead of time) is deliberately NOT flagged as
   // DNP -- there's no data for that week for any player yet, so it isn't
   // this player's absence to call out.
-  const playedWeeks = new Set(gameIdx.map(i => first.game_weeks[i]));
-  const dnpWeeks = Array.from(selectedWeeks).filter(w => w < WEEK && !playedWeeks.has(w));
+  const playedWeeks = new Set(allIdx.map(i => first.game_weeks[i]));
+  const dnpWeeks = Array.from(seasonWeeks()).filter(w => !playedWeeks.has(w));
   const gameEntries = [
-    ...gameIdx.map(i => ({{ week: first.game_weeks[i], idx: i }})),
+    ...allIdx.map(i => ({{ week: first.game_weeks[i], idx: i }})),
     ...dnpWeeks.map(w => ({{ week: w, idx: null }})),
   ].sort((a, b) => b.week - a.week); // most-recent-first, matching game_log's own order
 
@@ -4035,7 +4073,7 @@ function openPlayerModal(playerName) {{
   for (const entry of gameEntries) {{
     if (entry.idx === null) {{
       const dnpCells = '<td class="muted">DNP</td>'.repeat(playerRows.length);
-      gameRowsHtml += `<tr class="muted" title="No offensive snaps recorded for this player in Week ${{entry.week}} (inactive, injured, or a bye) -- not a missing-data gap.">
+      gameRowsHtml += `<tr class="muted${{selectedWeeks.has(entry.week) ? ' in-window' : ''}}" title="No offensive snaps recorded for this player in Week ${{entry.week}} (inactive, injured, or a bye) -- not a missing-data gap.">
         <td>${{SEASON}} Wk${{entry.week}} &mdash; DNP</td>${{dnpCells}}
       </tr>`;
       continue;
@@ -4049,7 +4087,7 @@ function openPlayerModal(playerName) {{
       const v = r.game_log[i];
       cells += `<td>${{fmt(Math.round(v * 10) / 10)}}${{oppRankChip(r, opp)}}</td>`;
     }}
-    gameRowsHtml += `<tr>${{cells}}</tr>`;
+    gameRowsHtml += `<tr class="${{selectedWeeks.has(week) ? 'in-window' : 'out-window'}}">${{cells}}</tr>`;
   }}
   const gameHeaderCells = playerRows.map(r => `<th>${{r.stat_label}}</th>`).join('');
 
@@ -4066,12 +4104,18 @@ function openPlayerModal(playerName) {{
     avgRankCells += `<td><span class="opp-rank-chip" ${{rankStyle(Math.round(avg), max)}}>#${{avg}}</span></td>`;
   }}
   // His average per stat over the games above (DNP weeks don't count).
-  let hisAvgCells = `<td class="muted">His avg (${{gameIdx.length}} game${{gameIdx.length === 1 ? '' : 's'}})</td>`;
+  let hisAvgCells = `<td class="muted">His avg, bold games (${{weeksLabel(selectedWeeks)}}, ${{gameIdx.length}} game${{gameIdx.length === 1 ? '' : 's'}})</td>`;
   for (const r of playerRows) {{
     const vs = gameIdx.map(i => r.game_log[i]).filter(v => v !== null && v !== undefined);
     hisAvgCells += `<td>${{vs.length ? fmt(Math.round(vs.reduce((a, b) => a + b, 0) / vs.length * 10) / 10) : '<span class="muted">-</span>'}}</td>`;
   }}
-  const avgRankRow = gameIdx.length ? `<tr class="opp-rank-avg">${{hisAvgCells}}</tr><tr class="opp-rank-avg">${{avgRankCells}}</tr>` : '';
+  let seasonAvgCells = `<td class="muted">Full season avg (${{allIdx.length}} game${{allIdx.length === 1 ? '' : 's'}})</td>`;
+  for (const r of playerRows) {{
+    const vs = allIdx.map(i => r.game_log[i]).filter(v => v !== null && v !== undefined);
+    seasonAvgCells += `<td>${{vs.length ? fmt(Math.round(vs.reduce((a, b) => a + b, 0) / vs.length * 10) / 10) : '<span class="muted">-</span>'}}</td>`;
+  }}
+  const seasonAvgRow = allIdx.length > gameIdx.length ? `<tr class="opp-rank-avg">${{seasonAvgCells}}</tr>` : '';
+  const avgRankRow = gameIdx.length ? `<tr class="opp-rank-avg">${{hisAvgCells}}</tr>${{seasonAvgRow}}<tr class="opp-rank-avg">${{avgRankCells}}</tr>` : seasonAvgRow;
 
   document.getElementById('modalBody').innerHTML = `
     <div class="modal-table-wrap">
@@ -4084,7 +4128,7 @@ function openPlayerModal(playerName) {{
       <tbody>${{summaryHtml}}</tbody>
     </table>
     </div>${{impactHtml}}${{secondLookHtml(playerRows)}}
-    <h3 class="modal-section-title">Game-by-game (${{weeksLabel(selectedWeeks)}})</h3>
+    <h3 class="modal-section-title">Game-by-game (whole season &middot; <strong>bold</strong> = ${{weeksLabel(selectedWeeks)}}, the weeks the picks use)</h3>
     <div class="modal-note">#N next to each number = how that game's opponent ranks at defending that stat against ${{escapeHtml(first.position)}}s (1 = toughest, ${{Object.keys((defCache[first.position + '|' + first.stat_col] || {{ranks: {{}}}}).ranks).length || 32}} = easiest), based on ${{weeksLabel(selectedWeeks)}} -- same ranking as the Opp Rank column.</div>
     <div class="modal-table-wrap">
     <table class="modal-table">
@@ -4218,20 +4262,21 @@ function openDefenseModal(team, clickedPos) {{
     // every stat column's value list above for this team+position.
     const gamesMeta = (DEFENSE_GAMES[team] && DEFENSE_GAMES[team][pos]) || [];
     const gameIdx = defenseSelectedIndices(gamesMeta, selectedWeeks);
+    const allIdx = defenseSelectedIndices(gamesMeta, seasonWeeks()).sort((a, b) => gamesMeta[b].week - gamesMeta[a].week);
     let gameRowsHtml = '';
     if (nextOff) {{
       let up = `<td><strong>This week vs ${{nextOff}}</strong> <span class="muted">(their avg)</span></td>`;
       for (const [col, label] of statsForPos) up += upcomingOffCell(pos + '|' + col, pos, label, nextOff);
       gameRowsHtml += `<tr class="upcoming-row">${{up}}</tr>`;
     }}
-    for (const i of gameIdx) {{
+    for (const i of allIdx) {{
       const vsLabel = gamesMeta[i].vs ? (' vs ' + gamesMeta[i].vs) : '';
       let cells = `<td>${{gamesMeta[i].season}} Wk${{gamesMeta[i].week}}${{vsLabel}}</td>`;
       for (const [col, label] of statsForPos) {{
         const v = perStatValues[col][i];
         cells += `<td>${{fmt(v === undefined ? null : Math.round(v * 10) / 10)}}${{v === undefined ? '' : offRankChip(pos + '|' + col, pos, label, gamesMeta[i].vs, team, gamesMeta[i].week, v)}}</td>`;
       }}
-      gameRowsHtml += `<tr>${{cells}}</tr>`;
+      gameRowsHtml += `<tr class="${{selectedWeeks.has(gamesMeta[i].week) ? 'in-window' : 'out-window'}}">${{cells}}</tr>`;
     }}
     // Average offense rank faced, per stat -- was this defense's sample
     // against strong or weak offenses for that stat?
@@ -4245,7 +4290,16 @@ function openDefenseModal(team, clickedPos) {{
       avgOffCells += `<td><span class="opp-rank-chip ${{avg <= OFF_RANK_EDGE ? 'off-hi' : (avg > oMax - OFF_RANK_EDGE ? 'off-lo' : '')}}">#${{avg}}</span></td>`;
     }}
     if (gameIdx.length) gameRowsHtml += `<tr class="opp-rank-avg">${{avgOffCells}}</tr>`;
-    if (!gameIdx.length && nextOff) gameRowsHtml += `<tr><td colspan="${{statsForPos.length + 1}}" class="muted">No games in the selected weeks.</td></tr>`;
+    // Averages allowed: bold (selected) games vs the full season.
+    if (allIdx.length > gameIdx.length) {{
+      const avgRow = (idx, label) => `<tr class="opp-rank-avg"><td class="muted">${{label}}</td>` + statsForPos.map(([col]) => {{
+        const vs = idx.map(i => perStatValues[col][i]).filter(v => v !== undefined && v !== null);
+        return `<td>${{vs.length ? fmt(Math.round(vs.reduce((a, b) => a + b, 0) / vs.length * 10) / 10) : '<span class="muted">-</span>'}}</td>`;
+      }}).join('') + '</tr>';
+      if (gameIdx.length) gameRowsHtml += avgRow(gameIdx, `Avg allowed, bold games (${{weeksLabel(selectedWeeks)}})`);
+      gameRowsHtml += avgRow(allIdx, `Full season avg allowed (${{allIdx.length}} games)`);
+    }}
+    if (!allIdx.length && nextOff) gameRowsHtml += `<tr><td colspan="${{statsForPos.length + 1}}" class="muted">No games played yet.</td></tr>`;
     const gameHeaderCells = statsForPos.map(([, label]) => `<th>${{label}}</th>`).join('');
 
     sectionsHtml += `
@@ -4256,7 +4310,7 @@ function openDefenseModal(team, clickedPos) {{
       <tbody>${{summaryRows}}</tbody>
     </table>
     </div>
-    <div class="modal-note">${{nextOff ? `Top row (highlighted) = ${{nextOff}}, the offense ${{team}} plays this week: its own per-game average and rank, to compare with the offenses below. ` : ''}}#N next to each number = how the offense ${{team}} faced that week ranks at producing that stat for ${{pos}}s (1 = produces the most). <span class="opp-rank-chip off-hi">orange</span> = one of the ${{OFF_RANK_EDGE}} highest-volume offenses, <span class="opp-rank-chip off-lo">blue</span> = one of the ${{OFF_RANK_EDGE}} lowest -- a small number allowed to a blue offense says little about this defense. Hover for that offense's usual output.</div>
+    <div class="modal-note">${{nextOff ? `Top row (highlighted) = ${{nextOff}}, the offense ${{team}} plays this week: its own per-game average and rank, to compare with the offenses below. ` : ''}}Every game this season is listed; <strong>bold</strong> = ${{weeksLabel(selectedWeeks)}}, the weeks the picks use. #N next to each number = how the offense ${{team}} faced that week ranks at producing that stat for ${{pos}}s (1 = produces the most). <span class="opp-rank-chip off-hi">orange</span> = one of the ${{OFF_RANK_EDGE}} highest-volume offenses, <span class="opp-rank-chip off-lo">blue</span> = one of the ${{OFF_RANK_EDGE}} lowest -- a small number allowed to a blue offense says little about this defense. Hover for that offense's usual output.</div>
     <div class="modal-table-wrap">
     <table class="modal-table">
       <thead><tr><th>Game</th>${{gameHeaderCells}}</tr></thead>
@@ -5175,6 +5229,7 @@ function myRulesHtml() {{
       '<b>&#11088; MUST BET</b> -- bet it. He cleared the line in every game and the defense allowed it in every game (' + CONS_MUST_MIN_GAMES + '+ games each), against one of the ' + MUST_BET_MATCHUP_TOP + ' defenses allowing the most (Over) / least (Under) of that stat.',
       '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
       '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
+      '<b>📅 Full year agrees:</b> shown next to the signal when the same side and line also holds over the whole season -- he and this defense both ' + Math.round(CONS_TIERS[1] * 100) + '%+ (after excused misses). A flag only; grades still follow the selected weeks.',
       '<b>🎯 Outlier defense:</b> one of the ' + OUTLIER_DEF_TOP + ' defenses allowing the most (or least) for the whole season, for RB Rush Yds and WR/TE Receptions only (where it held up in 2019-2025 tests). Shown as 🎯 O / 🎯 U next to the player name; turns a ❓ on that side into 💡, never a 3-star. If the line also looks off for that matchup (Anticipated ' + Math.round((OUTLIER_VALUE_RATIO - 1) * 100) + '%+ past it), even a row with no signal becomes 💡.',
       '<b>⬆ Alt line idea (Overs only -- books don\u2019t offer alt Unders):</b> when Anticipated is ' + Math.round((ALT_PROJ_RATIO - 1) * 100) + '%+ past the line, the furthest alt line (steps of 5 yards or 1 catch/carry) short of the projection that he cleared in ' + Math.round(ALT_HIT_RATE * 100) + '%+ of the selected games. A number to look up -- alt odds aren\u2019t pulled, so check the price. The \u2b06 Alt lines only box shows just these.',
       '<b>&#10067;</b> -- everything else worth a glance. Hover any ❓ for exactly why it isn’t a pick.',

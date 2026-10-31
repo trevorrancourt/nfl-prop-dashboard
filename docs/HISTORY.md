@@ -3344,3 +3344,10 @@ Trevor: "i fel like outliers should give more of a bump when lines seem low." Of
 - Neither was backtestable (no historical prop lines). Grade them before promoting.
 
 **Follow-up (2026-10-30):** after Trevor asked about Derrick Henry's "74.5" (an alt Under: projects 54, last 4 games 45/58/102/73), he said "you can't bet alt unders", so `altLineInfo` now suggests Over alts only.
+
+## Full-season popups + 📅 Full year agrees (2026-10-31)
+
+Trevor: "if I am looking at last 4 I want the suggestions to be that, but if I click into the players or defense to also show the rest of the year numbers game by game. Maybe like bold the last 4? Also, can we make an adjustment where if it's also supported by full year stats, it's flagged".
+
+- Popups: player and defense game-by-game tables now list every played game this season (`seasonWeeks()` = 1..WEEK-1); rows in the selected weeks get `.in-window` (bold), others `.out-window` (60% opacity). DNP rows cover the whole season. Footers: "His avg, bold games (Wk 4-7, 4 games)" + "Full season avg (7 games)"; the defense popup gets "Avg allowed, bold games" + "Full season avg allowed". Opp-rank chips still use the selected weeks.
+- 📅: `consistencyStats` gained an optional `onlySide`. For rows with a signal side, the full-season check (season share, season defense ranks for excused misses) must reach 75% for both him and the defense. Simulated board: 207 signal rows, 132 with 📅 (lines were set at each player's recent-4 low, so expect fewer on real lines).
