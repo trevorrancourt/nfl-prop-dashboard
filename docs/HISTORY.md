@@ -3353,3 +3353,11 @@ Trevor: "if I am looking at last 4 I want the suggestions to be that, but if I c
 - 📅: `consistencyStats` gained an optional `onlySide`. For rows with a signal side, the full-season check (season share, season defense ranks for excused misses) must reach 75% for both him and the defense. Simulated board: 207 signal rows, 132 with 📅 (lines were set at each player's recent-4 low, so expect fewer on real lines).
 
 **2026-10-31:** per Trevor ("get rid of the explainer text on the homepage at the top"), removed the signal legend (`pickyLabel` in consistency mode, incl. the small-sample note) and the "Rank: 1 = toughest … click a player's name" hint next to the Stat buttons. 📜 My rules covers both.
+
+## Win % / Need / Edge (2026-10-31)
+
+Trevor: "Is there something I could build to show like what I should be taking and winning to hit the probability and win percent chance with odds factored in?" Offered five methods (hit rate shrunk to market, projection + distribution, opponent-adjusted empirical, market no-vig, trained ML); recommended market base + projection + hit-rate nudge; Trevor: "If you think that's best build it".
+
+- Implementation and constants: see CLAUDE.md. Sanity: Poisson mu 5.4 vs 4.5 → 62.7% over; gamma mu 70/sd 40 vs 59.5 → 53.3%.
+- Calibration notes from simulated lines (no odds in the cloud session): first version had the hit rate at full weight and Anticipated at 50% unclamped, producing 85-97% calls (e.g. McBride Rec projected 5.8 because the opponent had allowed 4.75 TE catches over 4 games). Fixed: Anticipated 35% and clamped to 0.6-1.4× his form, hit rate half weight, projection-uncertainty smear, normal sd floor sqrt(mu), 2+ selected games. With lines at each player's season median (-110 both sides) the spread is roughly: 24% negative edge, 21% 0-2%, 18% 2-4%, 16% 4-7%, 21% 7%+. Real lines are sharper than median lines, so real edges should be smaller.
+- Not graded. When weekly grading exists, check calibration (do 60% calls win ~60%?) and tune `WIN_MODEL_WEIGHT` / `WIN_HIT_WEIGHT`.

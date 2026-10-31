@@ -971,6 +971,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <th data-key="edge" title="Recent Avg minus the most advantageous available line for whichever side (Over/Under) Recent Avg favors -- the lowest DK/FanDuel/BetMGM line for an Over, the highest for an Under. That book is highlighted in green below. Falls back to the consensus line if Recent Avg ties it exactly.">Edge</th>
         <th data-key="anc_edge" title="Anticipated minus that same shopped line -- Edge and Anc. Edge are graded against the same book/number, since they're two ways of sizing up one candidate bet.">Anc. Edge</th>
         <th data-key="signal_rank" title="1-3 &#128293; = Edge and Anc. Edge both significantly positive (a good OVER candidate) -- more flames means a bigger agreed-upon edge. 1-3 &#129482; = the mirror image, both significantly negative (a good UNDER candidate). &#11088; MUST BET = a 4th, much rarer tier above 3 -- both Edge and Anc. Edge clear a FIXED, deliberately extreme bar (100% -- recent form running at 2x the sportsbook's own line) in the same direction, AND the player has never landed on the wrong side of that line anywhere in your selected weeks, AND the matchup fits (Over: opponent is one of the 10 defenses allowing the most of this stat; Under: one of the 10 allowing the least), AND his games are consistent (standard deviation no more than 50% of the line). 3 flames/ice need the same matchup and consistency, otherwise they're held at 2 (marked with a small arrow). This bar does NOT move with the &quot;How picky&quot; slider below -- Trevor's ask was that MUST BET always mean the same absurd thing, while 1/2/3 stars keep flexing with the slider. &#10067; = one of Edge/Anc. Edge is significant on its own and the other isn't confirming it, but also isn't contradicting it (not on the opposite side of zero) -- worth a look. This is the table's default sort: MUST BET rows first, then 3-flame/3-ice, then 2s, then 1s, then &#10067;, then everything else.">&#128293;/&#129482;/&#11088;</th>
+        <th data-key="win_edge" title="Estimated chance to win the better side (O/U), then the break-even % its best price needs, then the edge (estimate minus break-even). Built from the market's juice-free odds, a projection model and his season hit rate. Hover a cell for the breakdown. Sort by this to see the best values first. An estimate, not proven yet.">Win % / Need / Edge</th>
         <th data-key="draftkings_line">DraftKings</th>
         <th data-key="fanduel_line">FanDuel</th>
         <th data-key="betmgm_line">BetMGM</th>
@@ -2057,6 +2058,15 @@ function refreshBetsSummary() {{
     lvPts += lv.pts; lvN++;
   }}
   const lvCard = lvN ? `<div class="bets-card" title="How your lines compare to the best DK/FanDuel/BetMGM line for the same side (frozen near kickoff once the game starts). Beating it more often than not is the best early sign of a real edge -- more reliable than win/loss over a small sample."><div class="muted">Line value vs market</div><div class="bets-big"><span class="edge-pos">${{lvB}}</span> / <span class="edge-neg">${{lvW}}</span>${{lvS ? ' / ' + lvS : ''}}</div><div class="muted">better / worse${{lvS ? ' / same' : ''}} &middot; avg ${{(lvPts / lvN > 0 ? '+' : '') + (Math.round(lvPts / lvN * 10) / 10)}} pts</div></div>` : '';
+  // Break-even check (2026-10-31): wins needed at the odds actually taken
+  // = sum of each settled bet's break-even %, vs wins actually got.
+  let beNeed = 0, beN = 0, beW = 0;
+  for (const x of list) {{
+    const b = x.b, o = parseOdds(b.odds);
+    if (o === null || (b.result !== 'win' && b.result !== 'loss')) continue;
+    beNeed += impliedProb(o); beN++; if (b.result === 'win') beW++;
+  }}
+  const beCard = beN ? `<div class="bets-card" title="Each settled bet's odds set the win % it needed to break even (-110 needs 52.4%, +150 needs 40%). Added up, that's how many wins your bets needed; more than that means you're ahead of the odds you took, not just ahead on record."><div class="muted">Wins vs break-even</div><div class="bets-big"><span class="${{beW >= beNeed ? 'edge-pos' : 'edge-neg'}}">${{beW}}</span> <span class="muted" style="font-size:14px;">of ${{beN}}</span></div><div class="muted">needed ${{Math.round(beNeed * 10) / 10}} (${{Math.round(beNeed / beN * 1000) / 10}}%) &middot; you ${{Math.round(beW / beN * 1000) / 10}}%</div></div>` : '';
   // Per-week breakdown
   const weeks = new Map();
   for (const x of (betsWeekFilter === 'ALL' ? allList : [])) {{
@@ -2074,7 +2084,7 @@ function refreshBetsSummary() {{
     <div class="bets-cards">
       <div class="bets-card"><div class="muted">Record (W-L${{st.p ? '-P' : ''}})${{scope}}</div><div class="bets-big">${{st.w}}-${{st.l}}${{st.p ? '-' + st.p : ''}}</div><div class="muted">${{winPct}} wins${{st.v ? ' &middot; ' + st.v + ' void' : ''}}</div></div>
       <div class="bets-card"><div class="muted">Total profit</div><div class="bets-big ${{cls}}">${{money(st.profit, true)}}</div><div class="muted">ROI ${{roi}} on ${{money(st.staked)}} risked</div></div>
-      ${{lvCard}}<div class="bets-card"><div class="muted">Pending</div><div class="bets-big">${{st.pending}}</div><div class="muted">${{money(st.pendingStake)}} in play</div></div>
+      ${{beCard}}${{lvCard}}<div class="bets-card"><div class="muted">Pending</div><div class="bets-big">${{st.pending}}</div><div class="muted">${{money(st.pendingStake)}} in play</div></div>
     </div>
     ${{st.unpriced ? `<div class="modal-note" style="margin-top:8px; color:var(--amber); opacity:1;">${{st.unpriced}} settled bet(s) are missing the $ amount or odds, so they count in the record but not in profit.</div>` : ''}}
     ${{wkRows ? `<table class="modal-table" style="margin-top:10px; width:auto;"><thead><tr><th>Week</th><th>Record</th><th>Pending</th><th>Risked</th><th>Profit</th></tr></thead><tbody>${{wkRows}}</tbody></table>` : ''}}`;
@@ -3399,6 +3409,171 @@ function hitCellHtml(r, which) {{
   return `<span class="${{cls}}" title="${{escapeHtml(lines.join('\\n'))}}">${{sideL}} ${{fmtHit(h, g)}}${{ex ? ` <span class="muted">(${{noTest ? 'no fair test' : fmtHit(h, g - ex)}})</span>` : ''}}</span>`;
 }}
 
+// ---- Win % / Edge (2026-10-31, per Trevor: "something I could build to
+// show like what I should be taking ... win percent chance with odds
+// factored in"; he asked for the best way, and agreed to: market base +
+// projection model + hit-rate nudge). For each side:
+//   1. Market: the no-vig chance from the books (each book's Over/Under
+//      prices with the juice removed), at the best line for that side.
+//   2. Model: a projection (60% last selected games / 40% season, blended
+//      65/35 with Anticipated = share x what this defense allows) run
+//      through a distribution: Poisson for small counts (catches, TDs,
+//      INTs, targets), normal for big counts (attempts, completions,
+//      carries), gamma for yards (skewed: occasional big games).
+//   3. Hit rate: his season record at this line, shrunk toward the market
+//      (WIN_HIT_PRIOR games of "market" weight), counted at WIN_HIT_WEIGHT.
+// Final = market, moved WIN_MODEL_WEIGHT of the way toward the model (in
+// log-odds), plus the hit-rate nudge. Need = break-even from the best
+// price. Edge = Win% - Need. Unproven: grade it before trusting it.
+const WIN_MODEL_WEIGHT = 0.35;
+const WIN_HIT_PRIOR = 12;
+const WIN_HIT_WEIGHT = 0.5; // the model already uses the same games, so the hit rate only half-counts
+const WIN_POISSON_STATS = new Set(['receptions', 'targets', 'passing_tds', 'total_tds', 'passing_interceptions', 'rushing_tds', 'receiving_tds']);
+const WIN_NORMAL_STATS = new Set(['attempts', 'completions', 'carries']);
+const WIN_YARD_CV = {{ passing_yards: 0.28, rushing_yards: 0.55, receiving_yards: 0.65 }};
+function _logGamma(x) {{
+  const c = [76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+  let y = x, tmp = x + 5.5;
+  tmp -= (x + 0.5) * Math.log(tmp);
+  let ser = 1.000000000190015;
+  for (const k of c) ser += k / ++y;
+  return -tmp + Math.log(2.5066282746310005 * ser / x);
+}}
+// Regularized lower incomplete gamma P(a, x).
+function _gammaP(a, x) {{
+  if (x <= 0) return 0;
+  const gln = _logGamma(a);
+  if (x < a + 1) {{
+    let ap = a, sum = 1 / a, del = sum;
+    for (let n = 0; n < 200; n++) {{ ap++; del *= x / ap; sum += del; if (Math.abs(del) < Math.abs(sum) * 1e-10) break; }}
+    return sum * Math.exp(-x + a * Math.log(x) - gln);
+  }}
+  let b = x + 1 - a, c = 1e300, d = 1 / b, h = d;
+  for (let i = 1; i < 200; i++) {{
+    const an = -i * (i - a); b += 2;
+    d = an * d + b; if (Math.abs(d) < 1e-300) d = 1e-300;
+    c = b + an / c; if (Math.abs(c) < 1e-300) c = 1e-300;
+    d = 1 / d; const del = d * c; h *= del;
+    if (Math.abs(del - 1) < 1e-10) break;
+  }}
+  return 1 - Math.exp(-x + a * Math.log(x) - gln) * h;
+}}
+function _normCdf(z) {{
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = 0.3989423 * Math.exp(-z * z / 2);
+  const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return z > 0 ? 1 - p : p;
+}}
+// Chance of Over / Under the line (pushes left out, so over + under = 1).
+// The projection itself is uncertain, so it's averaged over mu x 0.85 /
+// 1 / 1.15 -- without that, a tight player history made 85-90% calls.
+function _modelSides(statCol, mu, sd, line) {{
+  let o = 0, u = 0;
+  for (const [f, w] of [[0.85, 0.25], [1, 0.5], [1.15, 0.25]]) {{
+    const x = _modelSides1(statCol, mu * f, sd, line);
+    if (!x) return null;
+    o += w * x.over; u += w * x.under;
+  }}
+  return {{ over: o / (o + u), under: u / (o + u) }};
+}}
+function _modelSides1(statCol, mu, sd, line) {{
+  if (!(mu > 0)) return null;
+  let pOver, pUnder;
+  if (WIN_POISSON_STATS.has(statCol)) {{
+    let cdf = 0, term = Math.exp(-mu), below = 0, at = 0;
+    for (let k = 0; k <= Math.max(60, line * 3); k++) {{
+      if (k > 0) term *= mu / k;
+      if (k < line) below += term; else if (k === line) at += term;
+      cdf += term;
+    }}
+    pUnder = below; pOver = Math.max(0, cdf - below - at);
+  }} else if (WIN_NORMAL_STATS.has(statCol)) {{
+    const s = Math.max(sd || 0, Math.sqrt(mu), 0.5);
+    const isInt = Number.isInteger(line);
+    pOver = 1 - _normCdf(((isInt ? line + 0.5 : line) - mu) / s);
+    pUnder = _normCdf(((isInt ? line - 0.5 : line) - mu) / s);
+  }} else {{
+    const s = Math.max(sd || 0, mu * 0.15);
+    const k = (mu / s) * (mu / s), theta = s * s / mu; // gamma shape/scale from mean + sd
+    pUnder = _gammaP(k, Math.max(line, 0) / theta);
+    pOver = 1 - pUnder;
+  }}
+  const tot = pOver + pUnder;
+  if (!(tot > 0)) return null;
+  return {{ over: pOver / tot, under: pUnder / tot }};
+}}
+const _logit = p => Math.log(p / (1 - p));
+const _unlogit = z => 1 / (1 + Math.exp(-z));
+const _clampP = p => Math.min(0.97, Math.max(0.03, p));
+function impliedProb(price) {{ return 1 / americanToDecimal(price); }}
+function winChance(r, weeks, anticipated) {{
+  const statCol = r.stat_col;
+  if (statCol === 'receiving_air_yards' || !r.game_log) return null;
+  const selIdx = playerSelectedIndices(r, weeks), allIdx = playerSelectedIndices(r, seasonWeeks());
+  if (allIdx.length < 3 || selIdx.length < 2) return null; // too little to say anything
+  const sel = selIdx.map(i => r.game_log[i]), all = allIdx.map(i => r.game_log[i]);
+  const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+  const seasonAvg = mean(all), recent = sel.length ? mean(sel) : seasonAvg;
+  const form = 0.6 * recent + 0.4 * seasonAvg;
+  // Matchup projection counts 35%, held within 0.6x-1.4x of his own form so
+  // one odd defense sample can't swamp him (e.g. a TE-proof defense over 4
+  // games would otherwise drag a 9-catch TE to 3).
+  const ant = (anticipated !== null && anticipated !== undefined && anticipated > 0) ? Math.min(1.4 * form, Math.max(0.6 * form, anticipated)) : null;
+  const mu = ant !== null ? 0.65 * form + 0.35 * ant : form;
+  const histSd = Math.sqrt(all.reduce((s, v) => s + (v - seasonAvg) * (v - seasonAvg), 0) / Math.max(1, all.length - 1));
+  const cv = WIN_YARD_CV[statCol];
+  const sd = cv ? Math.sqrt(0.5 * histSd * histSd + 0.5 * (cv * mu) * (cv * mu)) : histSd;
+  let best = null;
+  for (const side of ['over', 'under']) {{
+    const m = bestMarketFor(r, side);
+    if (!m) continue;
+    const model = _modelSides(statCol, mu, sd, m.line);
+    if (!model) continue;
+    // Market chance at the best line: no-vig at books posting that exact
+    // line; otherwise another book's no-vig shifted by the model's own
+    // difference between the two lines.
+    const fair = [];
+    for (const [bk] of BET_BOOKS) {{
+      const L = r[bk + '_line'], po = r[bk + '_over_price'], pu = r[bk + '_under_price'];
+      if (L === null || L === undefined || po === null || po === undefined || pu === null || pu === undefined) continue;
+      const io = impliedProb(po), iu = impliedProb(pu);
+      let p = (side === 'over' ? io : iu) / (io + iu);
+      if (L !== m.line) {{
+        const at = _modelSides(statCol, mu, sd, L);
+        if (!at) continue;
+        p += model[side] - at[side];
+      }}
+      fair.push(p);
+    }}
+    if (!fair.length) continue;
+    const pMkt = _clampP(fair.reduce((a, b) => a + b, 0) / fair.length);
+    const hits = all.filter(v => side === 'over' ? v > m.line : v < m.line).length;
+    const pHit = _clampP((hits + WIN_HIT_PRIOR * pMkt) / (all.length + WIN_HIT_PRIOR));
+    const pModel = _clampP(model[side]);
+    const z = _logit(pMkt) + WIN_MODEL_WEIGHT * (_logit(pModel) - _logit(pMkt)) + WIN_HIT_WEIGHT * (_logit(pHit) - _logit(pMkt));
+    const p = _clampP(_unlogit(z));
+    const need = impliedProb(m.price);
+    const out = {{ side, line: m.line, price: m.price, book: m.book, p, need, edge: p - need, pMkt, pModel, pHit, hits, n: all.length, mu }};
+    if (!best || out.edge > best.edge) best = out;
+  }}
+  return best;
+}}
+function winCellHtml(r) {{
+  const w = r.win;
+  if (!w) return '<span class="muted">-</span>';
+  const pct = v => Math.round(v * 1000) / 10 + '%';
+  const sideL = w.side === 'over' ? 'O' : 'U';
+  const e = Math.round(w.edge * 1000) / 10;
+  const tip = [
+    `${{w.side === 'over' ? 'Over' : 'Under'}} ${{w.line}} at ${{w.price > 0 ? '+' : ''}}${{w.price}} (${{w.book}}): estimated ${{pct(w.p)}} to win; this price needs ${{pct(w.need)}} to break even.`,
+    `Market (juice removed): ${{pct(w.pMkt)}}`,
+    `Model: projects ${{Math.round(w.mu * 10) / 10}} -> ${{pct(w.pModel)}} (counts ${{Math.round(WIN_MODEL_WEIGHT * 100)}}%)`,
+    `His season at this line: ${{w.hits}} of ${{w.n}} -> ${{pct(w.pHit)}} after shrinking toward the market`,
+    'An estimate, not proven yet -- grade it before trusting it.',
+  ].join('\\n');
+  return `<span title="${{escapeHtml(tip)}}">${{sideL}} ${{pct(w.p)}} <span class="muted">/ ${{pct(w.need)}}</span> <strong class="${{e > 0 ? 'edge-pos' : 'edge-neg'}}">${{e > 0 ? '+' : ''}}${{e}}</strong></span>`;
+}}
+
 function enrichRow(r, weeks, defCache) {{
   const key = r.position + '|' + r.stat_col;
   if (!defCache[key]) defCache[key] = rankDefenses(key, weeks);
@@ -3739,8 +3914,12 @@ function enrichRow(r, weeks, defCache) {{
     }}
   }}
 
+  const win = winChance(r, weeks, anticipated);
+
   return Object.assign({{}}, r, derived, {{
     full_year: fullYear,
+    win: win,
+    win_edge: win ? win.edge : null,
     def_avg_allowed: defAvgRounded,
     def_rank: ranks[r.opponent] === undefined ? null : ranks[r.opponent],
     def_rank_max: Object.keys(ranks).length,
@@ -3867,6 +4046,7 @@ function render() {{
       <td class="${{edgeClass(r.edge_pct)}}">${{fmt(r.edge)}}</td>
       <td class="${{edgeClass(r.anc_edge_pct)}}">${{fmt(r.anc_edge)}}</td>
       <td>${{signalEmoji(r)}}${{fullYearTag(r)}}${{scriptTag(r)}}</td>
+      <td>${{winCellHtml(r)}}</td>
       <td class="${{r.best_book === 'draftkings' ? 'best-line' : ''}}" title="${{r.best_book === 'draftkings' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.draftkings_line, bookCellPrice(r, 'draftkings'))}}</td>
       <td class="${{r.best_book === 'fanduel' ? 'best-line' : ''}}" title="${{r.best_book === 'fanduel' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.fanduel_line, bookCellPrice(r, 'fanduel'))}}</td>
       <td class="${{r.best_book === 'betmgm' ? 'best-line' : ''}}" title="${{r.best_book === 'betmgm' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.betmgm_line, bookCellPrice(r, 'betmgm'))}}</td>
@@ -4013,6 +4193,7 @@ function openPlayerModal(playerName) {{
       <td class="${{edgeClass(r.edge_pct)}}">${{fmt(r.edge)}}</td>
       <td class="${{edgeClass(r.anc_edge_pct)}}">${{fmt(r.anc_edge)}}</td>
       <td>${{signalEmoji(r)}}${{fullYearTag(r)}}${{scriptTag(r)}}</td>
+      <td>${{winCellHtml(r)}}</td>
       <td class="${{r.best_book === 'draftkings' ? 'best-line' : ''}}" title="${{r.best_book === 'draftkings' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.draftkings_line, bookCellPrice(r, 'draftkings'))}}</td>
       <td class="${{r.best_book === 'fanduel' ? 'best-line' : ''}}" title="${{r.best_book === 'fanduel' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.fanduel_line, bookCellPrice(r, 'fanduel'))}}</td>
       <td class="${{r.best_book === 'betmgm' ? 'best-line' : ''}}" title="${{r.best_book === 'betmgm' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.betmgm_line, bookCellPrice(r, 'betmgm'))}}</td>
@@ -4123,7 +4304,7 @@ function openPlayerModal(playerName) {{
     <table class="modal-table">
       <thead><tr>
         <th>Mark</th><th>Stat</th><th>Avg (${{weeksLabel(selectedWeeks)}})</th><th>Opp Allows</th><th>Opp Rank</th><th>Hit</th><th>Opp Hit</th>
-        <th>Team Share</th><th>Anticipated</th><th>Edge</th><th>Anc. Edge</th><th>&#128293;/&#129482;/&#11088;</th>
+        <th>Team Share</th><th>Anticipated</th><th>Edge</th><th>Anc. Edge</th><th>&#128293;/&#129482;/&#11088;</th><th>Win % / Need / Edge</th>
         <th>DraftKings</th><th>FanDuel</th><th>BetMGM</th>
       </tr></thead>
       <tbody>${{summaryHtml}}</tbody>
@@ -5146,6 +5327,22 @@ function initColumns() {{
   const ths = Array.from(headTr.children);
   ths.forEach((th, i) => {{ th.dataset.col = String(i); }});
   const n = ths.length;
+  // New columns added since the layout was saved go at their default spot
+  // instead of wiping the saved layout.
+  if (Array.isArray(colState.order) && colState.order.length < n && colState.order.every(c => c >= 0 && c < colState.order.length)) {{
+    const old = colState.order.length;
+    for (let c = old; c < n; c++) colState.order.push(c);
+    const added = n - old;
+    const insertAt = Array.from(headTr.children).findIndex(th => th.dataset.key === 'win_edge');
+    if (insertAt >= 0 && added === 1) {{
+      colState.order = colState.order.slice(0, old).map(c => c >= insertAt ? c + 1 : c);
+      const pos = colState.order.findIndex(c => c === insertAt + 1);
+      colState.order.splice(pos >= 0 ? pos : colState.order.length, 0, insertAt);
+      const w = {{}};
+      for (const [k, v] of Object.entries(colState.widths || {{}})) w[parseInt(k, 10) >= insertAt ? parseInt(k, 10) + 1 : k] = v;
+      colState.widths = w;
+    }}
+  }}
   const ok = Array.isArray(colState.order) && colState.order.length === n &&
     new Set(colState.order).size === n && colState.order.every(c => c >= 0 && c < n);
   if (!ok) {{ colState.order = ths.map((_, i) => i); colState.widths = {{}}; }}
@@ -5230,6 +5427,7 @@ function myRulesHtml() {{
       '<b>&#11088; MUST BET</b> -- bet it. He cleared the line in every game and the defense allowed it in every game (' + CONS_MUST_MIN_GAMES + '+ games each), against one of the ' + MUST_BET_MATCHUP_TOP + ' defenses allowing the most (Over) / least (Under) of that stat.',
       '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
       '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
+      '<b>Win % / Need / Edge:</b> an estimated chance to win the better side: starts from the books\u2019 odds with the juice removed, moves ' + Math.round(WIN_MODEL_WEIGHT * 100) + '% of the way toward a projection model (Poisson for catches/TDs, normal for attempts/carries, a skewed curve for yards), then nudges (half weight) for his season hit rate at that line. Need = the break-even % of the best price; Edge = the difference. Context only -- it doesn\u2019t change picks or alerts, and it isn\u2019t proven yet.',
       '<b>📅 Full year agrees:</b> shown next to the signal when the same side and line also holds over the whole season -- he and this defense both ' + Math.round(CONS_TIERS[1] * 100) + '%+ (after excused misses). A flag only; grades still follow the selected weeks.',
       '<b>🎯 Outlier defense:</b> one of the ' + OUTLIER_DEF_TOP + ' defenses allowing the most (or least) for the whole season, for RB Rush Yds and WR/TE Receptions only (where it held up in 2019-2025 tests). Shown as 🎯 O / 🎯 U next to the player name; turns a ❓ on that side into 💡, never a 3-star. If the line also looks off for that matchup (Anticipated ' + Math.round((OUTLIER_VALUE_RATIO - 1) * 100) + '%+ past it), even a row with no signal becomes 💡.',
       '<b>⬆ Alt line idea (Overs only -- books don\u2019t offer alt Unders):</b> when Anticipated is ' + Math.round((ALT_PROJ_RATIO - 1) * 100) + '%+ past the line, the furthest alt line (steps of 5 yards or 1 catch/carry) short of the projection that he cleared in ' + Math.round(ALT_HIT_RATE * 100) + '%+ of the selected games. A number to look up -- alt odds aren\u2019t pulled, so check the price. The \u2b06 Alt lines only box shows just these.',
