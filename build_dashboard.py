@@ -1641,9 +1641,9 @@ function betSlip(r) {{
   const key = markKey(r);
   if (MARKS[key] !== 'bet') return '';
   const b = BETS[key] || {{}};
-  const hintLine = (r.best_line !== null && r.best_line !== undefined) ? r.best_line : r.vegas_line;
-  const hintOddsRaw = r.best_book
-    ? bookCellPrice(r, r.best_book)
+  const hintLine = (r.show_best_line !== null && r.show_best_line !== undefined) ? r.show_best_line : ((r.best_line !== null && r.best_line !== undefined) ? r.best_line : r.vegas_line);
+  const hintOddsRaw = (r.show_best_book || r.best_book)
+    ? bookCellPrice(r, r.show_best_book || r.best_book)
     : (r.direction === 'under' ? r.under_price : r.over_price);
   const hintOdds = (hintOddsRaw === null || hintOddsRaw === undefined) ? 'odds' : (hintOddsRaw > 0 ? '+' + hintOddsRaw : String(hintOddsRaw));
   const sideOpt = (v, label) => `<option value="${{v}}" ${{b.side === v ? 'selected' : ''}}>${{label}}</option>`;
@@ -2252,11 +2252,11 @@ function fmt(v, suffix) {{
   return suffix ? v + suffix : v;
 }}
 
-function fmtLine(point, price) {{
+function fmtLine(point, price, side) {{
   if (point === null || point === undefined) return '<span class="muted">-</span>';
   if (price === null || price === undefined) return point;
   const priceStr = price > 0 ? '+' + price : price;
-  return point + ' <span class="muted">(' + priceStr + ')</span>';
+  return point + ' <span class="muted">(' + (side ? (side === 'under' ? 'U ' : 'O ') : '') + priceStr + ')</span>';
 }}
 
 // Which of a book's two prices to show in its DK/FD/BetMGM column cell.
@@ -2270,8 +2270,11 @@ function fmtLine(point, price) {{
 // gate. Defaults to the Over price when there's no lean yet (a dead-even
 // tie against consensus, or no line at all), matching the old behavior
 // for that case.
+// show_side (2026-11-01, per Trevor: "it's pulling the under number for
+// Evan Engram over receptions"): the side the row's signal points to, not
+// the old Average-edge direction, which can disagree in Consistency mode.
 function bookCellPrice(r, book) {{
-  const suffix = r.direction === 'under' ? '_under_price' : '_over_price';
+  const suffix = (r.show_side || r.direction) === 'under' ? '_under_price' : '_over_price';
   return r[book + suffix];
 }}
 
@@ -3935,11 +3938,16 @@ function enrichRow(r, weeks, defCache) {{
   }}
 
   const win = winChance(r, weeks, anticipated);
+  const showSide = sigSide || (win ? win.side : derived.direction);
+  const showPick = showSide ? pickBestLine(r, showSide) : null;
 
   return Object.assign({{}}, r, derived, {{
     full_year: fullYear,
     win: win,
     win_edge: win ? win.edge : null,
+    show_side: showSide,
+    show_best_book: showPick ? showPick.book : null,
+    show_best_line: showPick ? showPick.line : null,
     def_avg_allowed: defAvgRounded,
     def_rank: ranks[r.opponent] === undefined ? null : ranks[r.opponent],
     def_rank_max: Object.keys(ranks).length,
@@ -4067,9 +4075,9 @@ function render() {{
       <td class="${{edgeClass(r.anc_edge_pct)}}">${{fmt(r.anc_edge)}}</td>
       <td>${{signalEmoji(r)}}${{fullYearTag(r)}}${{scriptTag(r)}}</td>
       <td>${{winCellHtml(r)}}</td>
-      <td class="${{r.best_book === 'draftkings' ? 'best-line' : ''}}" title="${{r.best_book === 'draftkings' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.draftkings_line, bookCellPrice(r, 'draftkings'))}}</td>
-      <td class="${{r.best_book === 'fanduel' ? 'best-line' : ''}}" title="${{r.best_book === 'fanduel' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.fanduel_line, bookCellPrice(r, 'fanduel'))}}</td>
-      <td class="${{r.best_book === 'betmgm' ? 'best-line' : ''}}" title="${{r.best_book === 'betmgm' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.betmgm_line, bookCellPrice(r, 'betmgm'))}}</td>
+      <td class="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.draftkings_line, bookCellPrice(r, 'draftkings'), r.show_side || r.direction)}}</td>
+      <td class="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.fanduel_line, bookCellPrice(r, 'fanduel'), r.show_side || r.direction)}}</td>
+      <td class="${{(r.show_best_book || r.best_book) === 'betmgm' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'betmgm' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.betmgm_line, bookCellPrice(r, 'betmgm'), r.show_side || r.direction)}}</td>
       <td class="${{weatherClass(r)}}">${{r.weather ? r.weather : '<span class="muted">-</span>'}}</td>
     </tr>`;
   }}
@@ -4214,9 +4222,9 @@ function openPlayerModal(playerName) {{
       <td class="${{edgeClass(r.anc_edge_pct)}}">${{fmt(r.anc_edge)}}</td>
       <td>${{signalEmoji(r)}}${{fullYearTag(r)}}${{scriptTag(r)}}</td>
       <td>${{winCellHtml(r)}}</td>
-      <td class="${{r.best_book === 'draftkings' ? 'best-line' : ''}}" title="${{r.best_book === 'draftkings' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.draftkings_line, bookCellPrice(r, 'draftkings'))}}</td>
-      <td class="${{r.best_book === 'fanduel' ? 'best-line' : ''}}" title="${{r.best_book === 'fanduel' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.fanduel_line, bookCellPrice(r, 'fanduel'))}}</td>
-      <td class="${{r.best_book === 'betmgm' ? 'best-line' : ''}}" title="${{r.best_book === 'betmgm' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.betmgm_line, bookCellPrice(r, 'betmgm'))}}</td>
+      <td class="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.draftkings_line, bookCellPrice(r, 'draftkings'), r.show_side || r.direction)}}</td>
+      <td class="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.fanduel_line, bookCellPrice(r, 'fanduel'), r.show_side || r.direction)}}</td>
+      <td class="${{(r.show_best_book || r.best_book) === 'betmgm' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'betmgm' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.betmgm_line, bookCellPrice(r, 'betmgm'), r.show_side || r.direction)}}</td>
     </tr>`;
   }}
 

@@ -3372,3 +3372,7 @@ Trevor asked how historical data could help; option 2 (tune the model on past se
 - **Fitted weights by stat** (model, hit): attempts 0.70/0.52, carries 0.67/0.27, completions 0.86/0.03, pass yds 0.69/0.00, rec yds 0.25/0.87, receptions 0.46/0.70, rush yds 0.36/0.30. QB passing hit rates add nothing; receiving hit rates add the most.
 - **Out of sample** (fit 2019-23, test 2024-25): current 0.6692 → per-stat 0.6655, with near-perfect calibration (57.3→57.2, 64.2→65.8, 75.1→74.7).
 - **Shipped:** per-stat weights ×0.75 (`WIN_WEIGHTS`), because real books know more than a median line, so these fitted weights are an upper bound. TDs, INTs and targets weren't tested and keep 0.35/0.5. My rules updated.
+
+## Book prices follow the signal side (2026-11-01)
+
+Trevor: "it's pulling the under number for Evan engram over [receptions]". Cause: `bookCellPrice()` and the best-line highlight used `r.direction` (recent average vs the line, from Average-edge mode), while Consistency signals pick their side from hit rates. A mostly-over player whose one bad game dragged his average under the line showed Under prices. Fix: `show_side` (signal side → Win % side → direction), cells label the side ("O -125"), and the highlight and bet-slip hint follow it. With simulated lines, 88 rows had shown the other side's price (3 with a signal).
