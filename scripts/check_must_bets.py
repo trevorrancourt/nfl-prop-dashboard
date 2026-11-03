@@ -34,7 +34,9 @@ JS = r"""
     week: WEEK, oddsTime: ODDS_TIME, mode: SIGNAL_MODE,
     linesPosted: rows.filter(x => x.vegas_line !== null && x.vegas_line !== undefined).length,
     picks: pick.map(x => {
-      const cn = x.cons || {};
+      // 🎯 3-stars (2026-11-03) aren't streak picks: use their own side/line/price.
+      const op = x.outlier_promo;
+      const cn = op ? { side: op.side, line: op.line, market: { price: op.price, book: op.book } } : (x.cons || {});
       const m = cn.market || null;
       return {
         key: markKey(x),

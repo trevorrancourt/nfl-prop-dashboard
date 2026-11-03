@@ -2533,6 +2533,7 @@ function roleTag(r) {{
 
 function tierEmojiSpan(emo, r) {{
   const parts = [];
+  if (r.outlier_promo) parts.push(`3-star from 🎯: ${{r.outlier_promo.text}}. ${{r.outlier_promo.side === 'over' ? 'Over' : 'Under'}} ${{r.outlier_promo.line}} at ${{r.outlier_promo.price > 0 ? '+' : ''}}${{r.outlier_promo.price}} (${{r.outlier_promo.book}}). Not a streak pick -- these went 22-10 in the Week 7-8 look-back, a small sample.`);
   if (SIGNAL_MODE === 'consistency' && r.cons) parts.push(`He cleared ${{r.cons.side}} ${{r.cons.line}} in ${{fmtHit(r.cons.pHits, r.cons.pGames)}} games; ${{r.opponent}} allowed it in ${{fmtHit(r.cons.dHits, r.cons.dGames)}}`);
   else if (r.tier_rel_sd !== null && r.tier_rel_sd !== undefined) parts.push(`Consistency: games swing ${{Math.round(r.tier_sd * 10) / 10}} (${{Math.round(r.tier_rel_sd * 100)}}% of the line; 3+ needs ${{Math.round(MAX_TIER3_REL_SD * 100)}}% or less)`);
   if (r.tier_cap_reason) parts.push(`Held at 2 instead of 3 -- ${{r.tier_cap_reason}}`);
@@ -3926,6 +3927,19 @@ function enrichRow(r, weeks, defCache) {{
   }} else if (outlierValue && !needsReview && !demoteWhy && hotLevel === 0 && coldLevel === 0 && !roleChanges.length && !mismatchFlag && !blowoutFlag) {{
     ideaReason = outlierValue;
   }}
+  // 🎯 line looks low → 3-star (2026-11-03, per Trevor: "let's try starting
+  // with 1", after the Week 7-8 look-back: on the 🎯 side, rows with no
+  // role/blowout/mismatch flag went 22-10, and 13-8 at -130 or better).
+  // Same guards as those, and the price gate still applies. Never a MUST BET.
+  let outlierPromo = null;
+  if (outlierValue && !roleChanges.length && !mismatchFlag && !blowoutFlag && !backupBlowout && hotLevel < 3 && coldLevel < 3) {{
+    const m = bestMarketFor(r, outlierDef.side);
+    if (m && m.price >= MAX_JUICE_PRICE) {{
+      outlierPromo = {{ side: outlierDef.side, line: m.line, price: m.price, book: m.book, text: outlierValue }};
+      if (outlierDef.side === 'over') {{ hotLevel = 3; coldLevel = 0; }} else {{ coldLevel = 3; hotLevel = 0; }}
+      ideaReason = null;
+    }}
+  }}
 
   // 📅 Full year agrees (2026-10-31, per Trevor: "if it's also supported by
   // full year stats, it's flagged"). Same hit-rate check on every played
@@ -3965,7 +3979,7 @@ function enrichRow(r, weeks, defCache) {{
     anc_edge_pct: ancEdgePct,
     hot: hot,
     cold: cold,
-    needs_review: needsReview,
+    needs_review: needsReview && !outlierPromo,
     idea_reason: ideaReason,
     outlier_def: outlierDef,
     outlier_value: outlierValue,
@@ -3974,7 +3988,8 @@ function enrichRow(r, weeks, defCache) {{
     hot_level: hotLevel,
     cold_level: coldLevel,
     signal: signal,
-    signal_rank: ideaReason ? 5 : signalRank, // 💡 sorts between 3-star (6) and ❓ (3)
+    outlier_promo: outlierPromo,
+    signal_rank: outlierPromo ? 6 : (ideaReason ? 5 : signalRank), // 💡 sorts between 3-star (6) and ❓ (3)
     tier_sd: tierSd,
     tier_rel_sd: tierRelSd,
     tier_cap_reason: tierCapReason,
@@ -5466,7 +5481,7 @@ function myRulesHtml() {{
       '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
       '<b>Win % / Need / Edge:</b> an estimated chance to win the better side: starts from the books\u2019 odds with the juice removed, moves part of the way toward a projection model (Poisson for catches/TDs, normal for attempts/carries, a skewed curve for yards) and his season hit rate at that line -- how much each counts per stat was tuned on 66,000 games from 2019-2025 (e.g. QB passing leans on the projection, receiving on the hit rate). In that test, its 57% calls won 57% and its 64% calls won 66%. Need = the break-even % of the best price; Edge = the difference: green +' + WIN_EDGE_GOOD * 100 + ' to +' + WIN_EDGE_CHECK * 100 + ' (if you like it, go), amber \u26a0 over +' + WIN_EDGE_CHECK * 100 + ' (check news first), gray 0 to +' + WIN_EDGE_GOOD * 100 + ', red negative. Context only -- it doesn\u2019t change picks or alerts, and it isn\u2019t proven yet.',
       '<b>📅 Full year agrees:</b> shown next to the signal when the same side and line also holds over the whole season -- he and this defense both ' + Math.round(CONS_TIERS[1] * 100) + '%+ (after excused misses). A flag only; grades still follow the selected weeks.',
-      '<b>🎯 Outlier defense:</b> one of the ' + OUTLIER_DEF_TOP + ' defenses allowing the most (or least) for the whole season, for RB Rush Yds and WR/TE Receptions only (where it held up in 2019-2025 tests). Shown as 🎯 O / 🎯 U next to the player name; turns a ❓ on that side into 💡, never a 3-star. If the line also looks off for that matchup (Anticipated ' + Math.round((OUTLIER_VALUE_RATIO - 1) * 100) + '%+ past it), even a row with no signal becomes 💡.',
+      '<b>🎯 Outlier defense:</b> one of the ' + OUTLIER_DEF_TOP + ' defenses allowing the most (or least) for the whole season, for RB Rush Yds and WR/TE Receptions only (where it held up in 2019-2025 tests). Shown as 🎯 O / 🎯 U next to the player name; turns a ❓ on that side into 💡, never a 3-star. If the line also looks off for that matchup (Anticipated ' + Math.round((OUTLIER_VALUE_RATIO - 1) * 100) + '%+ past it), the row becomes a 3-star on the 🎯 side (since Nov 3, after going 22-10 in the Week 7-8 look-back) -- unless it has a role change, blowout or matchup flag, or the price is worse than ' + MAX_JUICE_PRICE + ' (then it stays 💡). Never a MUST BET.',
       '<b>⬆ Alt line idea (Overs only -- books don\u2019t offer alt Unders):</b> when Anticipated is ' + Math.round((ALT_PROJ_RATIO - 1) * 100) + '%+ past the line, the furthest alt line (steps of 5 yards or 1 catch/carry) short of the projection that he cleared in ' + Math.round(ALT_HIT_RATE * 100) + '%+ of the selected games. A number to look up -- alt odds aren\u2019t pulled, so check the price. The \u2b06 Alt lines only box shows just these.',
       '<b>&#10067;</b> -- everything else worth a glance. Hover any ❓ for exactly why it isn’t a pick.',
     ])

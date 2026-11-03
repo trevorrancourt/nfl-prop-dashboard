@@ -3409,3 +3409,11 @@ Trevor: "last couple weeks i've been feeling like there are too many lighbulbs a
 - **🎯 line looks low:** 24-8 (75%), the strongest group.
 - **Win % edge didn't separate winners yet:** 3-10 -12.8u, 10+ -11.7u.
 - **Told Trevor:** the board makes few picks mainly because of the strict 3-star bar and the top-10 matchup rule, but the picks it makes aren't beating the near-misses (both ~53-54%). Offered to promote "🎯 line looks low" to 3-star (his earlier "3-star later if it wins" plan); no rule changed without his OK.
+
+## 🎯 "line looks low" promoted to 3-star (2026-11-03)
+
+Trevor picked option 1 ("let's try starting with 1"). Before shipping, `lookback.py` gained a check that grades these rows on the **🎯 side** at its best price. The earlier 24-8 had graded them on the streak (cons) side.
+- **Week 7:** all 17-5, unflagged 13-4, unflagged at -130 or better 8-3.
+- **Week 8:** all 13-15, unflagged 9-6, at -130 or better 5-5.
+- **Combined:** all 30-20 (+3.7u), unflagged 22-10 (+8.1u), unflagged at -130 or better 13-8 (+4.2u). Weaker than 24-8, still positive; Trevor was told the corrected numbers.
+- **Shipped:** the `outlierPromo` block after the 💡 logic in enrichRow (guards: no role/mismatch/blowout/backup flag, best price on the 🎯 side ≥ -130, below 3 already). Sets hot/cold = 3 on the 🎯 side, clears the 💡 and the ❓, and the hover starts with "3-star from 🎯 …". `check_must_bets.py` alerts with the promo's own side/line/price. My rules updated.
