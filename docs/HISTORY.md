@@ -3395,3 +3395,17 @@ Trevor: "last couple weeks i've been feeling like there are too many lighbulbs a
   - 3-10: 106-95, -2.5u.
   - 10+: 24-41, -20.1u. Huge edges were mostly the model missing something, which matches the amber "check first" color.
 - **Takeaway told to Trevor:** the top-10 matchup requirement is what keeps most would-be picks off the board. 💡s did better than expected. One week is ~50 graded bets per group, so no rule changed yet. Re-run weekly and decide after 3-4 weeks.
+
+**Week 7 (same day, `week=7`):**
+- **Picks:** MUST 1-1, 3-star 7-9, 💡 33-23, ❓ 49-54.
+- **Blocked:** not top-10 matchup 50 (26-24), price 9 (7-2), role change 6 (4-2), mismatch 1 (1-0).
+- **💡 by reason:** line looks low 14-3, 2-star near miss 14-17, game script 4-2.
+- **❓ by reason:** matchup 11-6, role 14-11, 1-2 star 5-10.
+- **Edge buckets:** <0 -0.1u, 0-3 -6.4u, 3-10 -10.3u, 10+ +8.4u.
+
+**Weeks 7+8 combined:**
+- **Picks:** MUST BET 1-2, 3-star 15-13 (54%), 💡 64-42 (60%), ❓ 96-104 (48%).
+- **Blocked by the top-10 matchup rule:** 47-41 (53%). Blocked by price: 12-6. Blocked by role change: 5-3.
+- **🎯 line looks low:** 24-8 (75%), the strongest group.
+- **Win % edge didn't separate winners yet:** 3-10 -12.8u, 10+ -11.7u.
+- **Told Trevor:** the board makes few picks mainly because of the strict 3-star bar and the top-10 matchup rule, but the picks it makes aren't beating the near-misses (both ~53-54%). Offered to promote "🎯 line looks low" to 3-star (his earlier "3-star later if it wins" plan); no rule changed without his OK.
