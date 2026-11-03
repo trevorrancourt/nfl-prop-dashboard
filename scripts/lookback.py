@@ -255,7 +255,7 @@ def main():
                 n += 1
                 print(f"::notice title=Look back {n}::" + "%0A".join(chunk))
                 chunk, size = [], 0
-            chunk.append(ln.replace("%", "%25"))
+            chunk.append(ln.replace("%", "%25").replace("\n", "%0A"))  # a raw newline would end the note
             size += len(ln) + 3
         if chunk:
             n += 1
