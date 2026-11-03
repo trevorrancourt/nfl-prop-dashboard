@@ -3649,6 +3649,9 @@ function enrichRow(r, weeks, defCache) {{
   const cons = consistencyStats(r, weeks, derived.share, ranks);
   let consReview = false, consReviewReason = null;
   let mismatchFlag = false;
+  // Look-back bookkeeping (2026-11-03): what each rule took away, so
+  // scripts/lookback.py can grade "would have been a pick" rows.
+  let lbRaw = 0, lbCapped = false, lbMismatch = null, lbPriced = 0;
   if (SIGNAL_MODE === 'consistency' && cons && cons.pGames >= consMinGames(weeks) && cons.dGames >= consMinGames(weeks)) {{
     const p = cons.pRate, d = cons.dRate, perfect = p === 1;
     let lvl = 0;
@@ -3656,14 +3659,17 @@ function enrichRow(r, weeks, defCache) {{
     if (perfect && d >= CONS_TIERS[0]) lvl = 2;
     if (perfect && d >= CONS_TIERS[1]) lvl = 3;
     if (perfect && d === 1 && cons.pHits === cons.pGames && cons.pGames >= consMustMinGames(weeks) && cons.dGames - cons.dExcused >= consMustMinGames(weeks)) lvl = 4;
+    lbRaw = lvl;
     if (lvl >= 3) {{
       const mOk = mbRank !== null && (cons.side === 'over' ? mbRank > mbMax - MUST_BET_MATCHUP_TOP : mbRank <= MUST_BET_MATCHUP_TOP);
       if (!mOk) {{
         tierCapReason = `matchup: ${{r.opponent}} is #${{mbRank === null ? '-' : mbRank}} of ${{mbMax}}, not one of the 10 allowing the ${{cons.side === 'over' ? 'most' : 'least'}}`;
         lvl = 2;
+        lbCapped = true;
       }}
     }}
     const mismatch = lvl > 0 ? matchupMismatch(r, cons, weeks) : null;
+    if (mismatch) lbMismatch = /hasn.t faced/.test(mismatch) ? 'untested' : 'mismatch';
     if (mismatch) mismatchFlag = true;
     if (mismatch) lvl = 0;
     if (cons.side === 'over') hotLevel = lvl; else coldLevel = lvl;
@@ -3760,6 +3766,8 @@ function enrichRow(r, weeks, defCache) {{
   const overPrice = (SIGNAL_MODE === 'consistency' && cons && cons.side === 'over' && cons.market) ? cons.market.price : (derived.best_book ? bookOverPrice(derived.best_book) : r.over_price);
   const underPrice = (SIGNAL_MODE === 'consistency' && cons && cons.side === 'under' && cons.market) ? cons.market.price : (derived.best_book ? bookUnderPrice(derived.best_book) : r.under_price);
   let suppressedBy = null;
+  if (hotLevel > 0 && overPrice !== null && overPrice !== undefined && overPrice < MAX_JUICE_PRICE) lbPriced = hotLevel;
+  if (coldLevel > 0 && underPrice !== null && underPrice !== undefined && underPrice < MAX_JUICE_PRICE) lbPriced = coldLevel;
   if (hotLevel > 0 && overPrice !== null && overPrice !== undefined && overPrice < MAX_JUICE_PRICE) {{
     suppressedBy = {{ side: 'Over', price: overPrice }};
     hotLevel = 0;
@@ -3946,6 +3954,7 @@ function enrichRow(r, weeks, defCache) {{
     win: win,
     win_edge: win ? win.edge : null,
     show_side: showSide,
+    lookback: {{ raw: lbRaw, capped: lbCapped, mismatch: lbMismatch, priced: lbPriced, demotedFrom, blowout: blowoutFlag, backup: backupBlowout, role: roleChanges.length > 0 }},
     show_best_book: showPick ? showPick.book : null,
     show_best_line: showPick ? showPick.line : null,
     def_avg_allowed: defAvgRounded,

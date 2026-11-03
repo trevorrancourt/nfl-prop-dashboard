@@ -1,0 +1,58 @@
+name: Look back on a week
+
+# Manual only (2026-11-03, per Trevor: "can you do a look back on last
+# week"). Replays the boards saved during a finished week (the "Archive this
+# build" artifacts from update.yml) with the current page code, grades every
+# row against the real box scores, and posts the summary as notes on the run.
+# Pulls no odds, so it costs no Odds API credits.
+on:
+  workflow_dispatch:
+    inputs:
+      week:
+        description: "Week to grade (leave blank for the last finished week)"
+        required: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  lookback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      TZ: America/Denver
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt playwright==1.47.0 && python -m playwright install --with-deps chromium
+
+      - name: Build the current page code (no odds pulled)
+        run: python run.py --skip-odds --skip-weather --skip-coverage
+
+      - name: Download the saved boards
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p boards
+          since=$(date -u -d '14 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          gh api --paginate "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+            -q '.artifacts[] | select(.name | startswith("board-")) | select(.expired | not) | "\(.id) \(.created_at)"' |
+            awk -v s="$since" '$2 > s' | while read -r id created; do
+              d="boards/$(echo "$created" | tr ':' '-')"
+              mkdir -p "$d"
+              gh api "repos/${{ github.repository }}/actions/artifacts/$id/zip" > "$d/a.zip" && unzip -q -o "$d/a.zip" -d "$d" && rm -f "$d/a.zip"
+            done
+          echo "Downloaded $(ls boards | wc -l) boards"
+
+      - name: Grade the week
+        env:
+          WEEK_IN: ${{ inputs.week }}
+        run: |
+          current=$(grep -o '^const WEEK = [0-9]*' output/dashboard.html | grep -o '[0-9]*$')
+          python scripts/lookback.py --template output/dashboard.html --boards boards --week "${WEEK_IN:-$((current - 1))}"
