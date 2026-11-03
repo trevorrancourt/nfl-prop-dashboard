@@ -3376,3 +3376,22 @@ Trevor asked how historical data could help; option 2 (tune the model on past se
 ## Book prices follow the signal side (2026-11-01)
 
 Trevor: "it's pulling the under number for Evan engram over [receptions]". Cause: `bookCellPrice()` and the best-line highlight used `r.direction` (recent average vs the line, from Average-edge mode), while Consistency signals pick their side from hit rates. A mostly-over player whose one bad game dragged his average under the line showed Under prices. Fix: `show_side` (signal side → Win % side → direction), cells label the side ("O -125"), and the highlight and bet-slip hint follow it. With simulated lines, 88 rows had shown the other side's price (3 with a signal).
+
+## Look back: Week 8 (2026-11-03)
+
+Trevor: "last couple weeks i've been feeling like there are too many lighbulbs and question marks and not enough suggested bets", then "can you do a look back on last week". Built `lookback.yml` + `scripts/lookback.py` (see CLAUDE.md). It replays the last board before each Week 8 kickoff with the current rules and grades against nflverse.
+
+- **Picks:** MUST BET 1 (0-1), 3-star 12 (8-4, 67%), 💡 50 (31-19, 62%), ❓ 97 (47-50, 48%).
+- **Would-be 3-star/MUST blocked: 50.**
+  - Not a top-10 matchup: 38 (4 MUST), 21-17 (55%).
+  - Price worse than -130: 9, 5-4.
+  - Role change: 2, 1-1.
+  - Mismatch: 1 MUST, 0-1.
+- **💡 by reason:** 2-star near miss 18-11, 🎯 line looks low 10-5, blowout upside 2-2, game script 1-1.
+- **❓ by reason:** matchup 6-12 (the mismatch rule avoided losers), role change 12-12, 1-2 star 5-7, other 24-19.
+- **Win % edge buckets** (better side, best price):
+  - <0: 73-62, +3.7u.
+  - 0-3: 75-59, +7.2u.
+  - 3-10: 106-95, -2.5u.
+  - 10+: 24-41, -20.1u. Huge edges were mostly the model missing something, which matches the amber "check first" color.
+- **Takeaway told to Trevor:** the top-10 matchup requirement is what keeps most would-be picks off the board. 💡s did better than expected. One week is ~50 graded bets per group, so no rule changed yet. Re-run weekly and decide after 3-4 weeks.
