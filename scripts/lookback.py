@@ -68,6 +68,8 @@ EVAL_JS = r"""() => {
       line: c ? c.line : null, price: c && c.market ? c.market.price : null,
       lb: e.lookback, idea: e.idea_reason || '', why: e.review_reason || '',
       win: e.win ? { side: e.win.side, line: e.win.line, price: e.win.price, edge: e.win.edge, p: e.win.p } : null,
+      ov: e.outlier_value ? (() => { const m = bestMarketFor(e, e.outlier_def.side); return m ? { side: e.outlier_def.side, line: m.line, price: m.price } : null; })() : null,
+      blocked: (e.lookback.role || e.lookback.blowout || !!e.lookback.mismatch),
     });
   }
   return out;
@@ -183,6 +185,8 @@ def main():
         r["res"] = result(r["actual"], r["side"], r["line"])
         w = r["win"]
         r["wres"] = result(r["actual"], w["side"], w["line"]) if w else None
+        o = r["ov"]
+        r["ores"] = result(r["actual"], o["side"], o["line"]) if o else None
 
     lines = []
     groups = defaultdict(list)
@@ -226,6 +230,15 @@ def main():
     lines.append("\n❓ by reason:")
     for k, rs in sorted(qs.items(), key=lambda kv: -len(kv[1])):
         lines.append(f"  {k:28s} {len(rs):4d}  {rec(rs)}")
+
+    ov = [r for r in rows if r["ores"]]
+    lines.append("\n🎯 line looks low/high, graded on the 🎯 side at its best price:")
+    for lbl, rs in (("all", ov), ("no role/blowout/mismatch flag", [r for r in ov if not r["blocked"]]),
+                    ("price -130 or better", [r for r in ov if not r["blocked"] and r["ov"]["price"] is not None and r["ov"]["price"] >= -130])):
+        u = sum(profit(r["ores"], r["ov"]["price"]) for r in rs)
+        lines.append(f"  {lbl:32s} {len(rs):3d}  {rec([r['ores'] for r in rs])}  {u:+.1f} units")
+    for r in ov[:25]:
+        lines.append(f"    {r['ores']} {r['player']} {r['label']} {r['ov']['side'][0].upper()}{r['ov']['line']} ({r['ov']['price']}) -> {r['actual']:g}  [{r['group']}{', flagged' if r['blocked'] else ''}]")
 
     eb = defaultdict(list)
     for r in rows:
