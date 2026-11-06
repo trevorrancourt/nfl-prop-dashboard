@@ -5600,7 +5600,7 @@ def main():
         if unmatched:
             msg += "; NOT on the board: " + ", ".join(unmatched[:80])
         print(msg)
-        if os.environ.get("GITHUB_ACTIONS"):
+        if __import__("os").environ.get("GITHUB_ACTIONS"):  # main() imports os locally further down
             print("::notice title=Odds names::" + msg.replace("%", "%25"))
 
     no_odds_note = ""
