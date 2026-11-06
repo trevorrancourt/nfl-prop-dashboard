@@ -22,7 +22,8 @@ Read this first in every session. The full build history (every version, decisio
    - `ODDS_MIN_REMAINING` is a quota guard: below that, it skips the pull and keeps the cached lines.
 4. `fetch_weather.py`: Open-Meteo forecasts. Optional; it must never block the build.
 5. `fetch_coverage.py`: Sharp Football man/zone scrape. Optional.
-6. `build_dashboard.py`: one large `HTML_TEMPLATE` (Python `str.format`) holding all the JS/CSS, writing `output/dashboard.html`.
+6. `build_dashboard.py`: odds join to players by `normalize_name`, with a fallback (2026-11-06, per Trevor: "Nate B from Jacksonville has a line and it isn't coming in") on first initial + last name when exactly one odds name fits (`odds_for_player`). A player with a posted line always gets rows, even under `RELEVANCE_FILTER`. Each Actions build posts an "Odds names" notice: how many players with lines matched, and the odds names that didn't make the board.
+   `build_dashboard.py` itself: one large `HTML_TEMPLATE` (Python `str.format`) holding all the JS/CSS, writing `output/dashboard.html`.
    - Data is baked in as JS constants: `ROWS`, `DEFENSE_LOGS`, `DEFENSE_GAMES`, `GAMES`, `TEAM_RESULTS`, `INJ_BY_TEAM`, `COVERAGE`, `WEEK`, `SEASON`, `ODDS_TIME`.
 
 **Monday Night board:** when the previous week still has an un-kicked-off game, `run.py` also builds `output/dashboard_mnf.html` from `data_mnf/`, using these env vars:

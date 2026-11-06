@@ -3417,3 +3417,11 @@ Trevor picked option 1 ("let's try starting with 1"). Before shipping, `lookback
 - **Week 8:** all 13-15, unflagged 9-6, at -130 or better 5-5.
 - **Combined:** all 30-20 (+3.7u), unflagged 22-10 (+8.1u), unflagged at -130 or better 13-8 (+4.2u). Weaker than 24-8, still positive; Trevor was told the corrected numbers.
 - **Shipped:** the `outlierPromo` block after the 💡 logic in enrichRow (guards: no role/mismatch/blowout/backup flag, best price on the 🎯 side ≥ -130, below 3 already). Sets hot/cold = 3 on the 🎯 side, clears the 💡 and the ❓, and the hover starts with "3-star from 🎯 …". `check_must_bets.py` alerts with the promo's own side/line/price. My rules updated.
+
+
+## Lines not matching players (2026-11-06)
+
+Trevor: "Lines aren't pulling improperly. Nate B from Jacksonville has a line and it isn't coming in". Nate Boerkircher (JAX TE) was on the board (rows built from nflverse) with no line, so the Odds API name didn't match after `normalize_name` (likely a different first-name spelling; the cloud session can't see the odds cache to confirm). Fixes:
+- `odds_for_player()` falls back to first initial + last name when exactly one odds name fits (ambiguous ones like two "J. Allen"s don't match).
+- A player with a posted line skips `RELEVANCE_FILTER` (low-usage players with lines were dropped before).
+- An "Odds names" notice on every Actions build reports matched/total and lists unmatched odds names, so the next mismatch shows up without guessing.

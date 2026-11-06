@@ -9,6 +9,7 @@ stats/matchup side with the Vegas line column blank.
 """
 
 import json
+import os
 import re
 from datetime import datetime
 from pathlib import Path
@@ -445,6 +446,37 @@ def format_weather(entry):
     return text, entry["wind_mph"], is_bad_weather(entry)
 
 
+# Fallback name match (2026-11-06, per Trevor: "Nate B from Jacksonville has
+# a line and it isn't coming in"): books and nflverse don't always spell a
+# name the same way (Nate / Nathan, a middle initial, a hyphen). When the
+# exact normalized name misses, match on first initial + last name, but
+# only if exactly one odds name fits. MATCHED_ODDS records which odds names
+# landed on a row, so main() can list the ones that didn't.
+MATCHED_ODDS = set()
+_ODDS_FALLBACK = {}
+
+
+def _fallback_key(norm):
+    parts = norm.replace("-", " ").split()
+    return (parts[0][:1], parts[-1]) if len(parts) >= 2 else None
+
+
+def odds_for_player(odds_lookup, norm_name):
+    if norm_name in odds_lookup:
+        MATCHED_ODDS.add(norm_name)
+        return odds_lookup[norm_name]
+    if not _ODDS_FALLBACK and odds_lookup:
+        for k in odds_lookup:
+            fk = _fallback_key(k)
+            if fk:
+                _ODDS_FALLBACK.setdefault(fk, []).append(k)
+    hits = _ODDS_FALLBACK.get(_fallback_key(norm_name), [])
+    if len(hits) == 1:
+        MATCHED_ODDS.add(hits[0])
+        return odds_lookup[hits[0]]
+    return {}
+
+
 def build_odds_lookup(odds):
     """normalized player name -> {market_key: {...}}"""
     if not odds:
@@ -576,11 +608,12 @@ def build_rows(stats, odds_lookup, weather, injuries, injuries_by_team):
         opp = info.get("upcoming_opponent")
         if not opp or pos not in STAT_MARKET_MAP:
             continue
-        if not RELEVANCE_FILTER.get(pos, lambda a: True)(info["recent_avg"]):
-            continue
-
         norm_name = normalize_name(player_name)
-        player_odds = odds_lookup.get(norm_name, {})
+        player_odds = odds_for_player(odds_lookup, norm_name)
+        # A player the books post a line for always gets rows, even if his
+        # usage is under the relevance bar (2026-11-06).
+        if not player_odds and not RELEVANCE_FILTER.get(pos, lambda a: True)(info["recent_avg"]):
+            continue
 
         # This week's official injury-report designation for this exact
         # player, if any -- joined by nflverse's stable player_id (the same
@@ -5561,6 +5594,14 @@ def main():
     stats, odds, weather, coverage, injuries, injuries_by_team = load_caches()
     odds_lookup = build_odds_lookup(odds)
     rows = build_rows(stats, odds_lookup, weather, injuries, injuries_by_team)
+    unmatched = sorted(k for k in odds_lookup if k not in MATCHED_ODDS)
+    if odds_lookup:
+        msg = f"{len(odds_lookup) - len(unmatched)} of {len(odds_lookup)} players with lines matched to the board"
+        if unmatched:
+            msg += "; NOT on the board: " + ", ".join(unmatched[:80])
+        print(msg)
+        if os.environ.get("GITHUB_ACTIONS"):
+            print("::notice title=Odds names::" + msg.replace("%", "%25"))
 
     no_odds_note = ""
     if odds is None:
