@@ -53,6 +53,10 @@ def kickoff_utc(g):
 
 EVAL_JS = r"""() => {
   const dc = {}; const out = [];
+  const tp = (typeof topPicks === 'function') ? topPicks() : { top: [], review: [] };
+  const tier = {};
+  tp.top.forEach(c => { tier[markKey(c.e)] = 'top'; });
+  tp.review.forEach(c => { tier[markKey(c.e)] = 'review'; });
   for (const r of ROWS) {
     const e = enrichRow(r, selectedWeeks, dc);
     const c = e.cons;
@@ -72,6 +76,9 @@ EVAL_JS = r"""() => {
       ov: e.outlier_value ? (() => { const m = bestMarketFor(e, e.outlier_def.side); return m ? { side: e.outlier_def.side, line: m.line, price: m.price } : null; })() : null,
       blocked: (e.lookback.role || e.lookback.blowout || !!e.lookback.mismatch),
       promo: !!e.outlier_promo,
+      grp: (typeof pickGroup === 'function') ? pickGroup(e) : null,
+      bet: (typeof pickBet === 'function') ? pickBet(e) : null,
+      tier: tier[markKey(e)] || null,
       ld: (typeof ladderInfo === 'function') ? (() => { const i = ladderInfo(e); return i ? { goff: i.goff, lift: i.lift, target: i.target, rungs: i.rungs.map(g => [g.t, g.p]), top: !!ladderPick(e) } : null; })() : null,
     });
   }
@@ -123,6 +130,7 @@ def main():
     ap.add_argument("--template", required=True)
     ap.add_argument("--boards", required=True)
     ap.add_argument("--week", type=int, required=True)
+    ap.add_argument("--record-file", help="results/track_record.json to update with this week's group records")
     args = ap.parse_args()
 
     template = Path(args.template).read_text()
@@ -188,6 +196,8 @@ def main():
         r["res"] = result(r["actual"], r["side"], r["line"])
         w = r["win"]
         r["wres"] = result(r["actual"], w["side"], w["line"]) if w else None
+        b = r.get("bet")
+        r["gres"] = result(r["actual"], b["side"], b["line"]) if b else None
         o = r["ov"]
         r["ores"] = result(r["actual"], o["side"], o["line"]) if o else None
 
@@ -199,6 +209,33 @@ def main():
     lines.append(f"WEEK {args.week} -- graded at the board's line, on the side it pointed to (players who didn't play are left out)")
     for gname in ("MUST BET", "3-star", "💡", "❓"):
         lines.append(f"  {gname:9s} {len(groups[gname]):4d} rows  {rec(groups[gname])}")
+
+    tiers = defaultdict(list)
+    for r in rows:
+        if r.get("tier") and r["gres"]:
+            tiers[r["tier"]].append(r)
+    if tiers:
+        lines.append("\nTop 3 / Review lists (graded on their own bet):")
+        for t in ("top", "review"):
+            rs = tiers.get(t, [])
+            lines.append(f"  {'⭐ Top 3' if t == 'top' else '🔍 Review':10s} {len(rs):3d}  {rec([r['gres'] for r in rs])}")
+            if t == "top":
+                for r in rs:
+                    lines.append(f"    {r['gres']} {r['player']} {r['label']} {r['bet']['side'][0].upper()}{r['bet']['line']} ({r['bet']['price']}) -> {r['actual']:g}  [{r['grp']}]")
+    grp = defaultdict(lambda: [0, 0])
+    for r in rows:
+        if r.get("grp") and r["gres"] in ("W", "L"):
+            grp[r["grp"]][0 if r["gres"] == "W" else 1] += 1
+    if grp:
+        lines.append("\nPick groups (feeds the Top 3 scoring):")
+        for g, (w, l) in sorted(grp.items(), key=lambda kv: -(kv[1][0] + kv[1][1])):
+            lines.append(f"  {g:16s} {w}-{l}")
+    if args.record_file and grp:
+        rf = Path(args.record_file)
+        data = json.loads(rf.read_text()) if rf.exists() else {"weeks": {}}
+        data.setdefault("weeks", {})[str(args.week)] = {g: v for g, v in sorted(grp.items())}
+        rf.write_text(json.dumps(data, indent=1) + "\n")
+        print(f"Saved week {args.week} group records to {rf}")
 
     blocked = defaultdict(list)
     for r in rows:

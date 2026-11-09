@@ -28,19 +28,22 @@ JS = r"""
   const c = {};
   const rows = ROWS.map(r => enrichRow(r, selectedWeeks, c));
   const lvl = x => x.hot_level || x.cold_level;
-  const pick = rows.filter(x => lvl(x) === 4 || (includeThrees && lvl(x) === 3));
+  // Since 2026-11-09 alerts are the board's Top 3 (topPicks), per Trevor.
+  const pick = (typeof topPicks === 'function')
+    ? topPicks().top.map(c => Object.assign({}, c.e, { _bet: c.bet, _p: c.p }))
+    : rows.filter(x => lvl(x) === 4 || (includeThrees && lvl(x) === 3));
   const fmtP = p => p === null || p === undefined ? '' : (p > 0 ? '+' + p : String(p));
   return {
     week: WEEK, oddsTime: ODDS_TIME, mode: SIGNAL_MODE,
     linesPosted: rows.filter(x => x.vegas_line !== null && x.vegas_line !== undefined).length,
     picks: pick.map(x => {
       // 🎯 3-stars (2026-11-03) aren't streak picks: use their own side/line/price.
-      const op = x.must_pick || x.outlier_promo; // MUST BET (two signals) or 🎯 3-star: their own side/line/price
+      const op = x._bet || x.must_pick || x.outlier_promo; // Top 3 / MUST BET / 🎯 3-star: their own side/line/price
       const cn = op ? { side: op.side, line: op.line, market: { price: op.price, book: op.book } } : (x.cons || {});
       const m = cn.market || null;
       return {
         key: markKey(x),
-        tier: lvl(x) === 4 ? 'MUST BET' : (x.hot_level ? '3 fire' : '3 ice'),
+        tier: x._bet ? `TOP 3 (${Math.round(x._p * 100)}%)` : (lvl(x) === 4 ? 'MUST BET' : (x.hot_level ? '3 fire' : '3 ice')),
         player: x.player, team: x.team, opp: (x.at_opponent ? '@' : 'vs ') + x.opponent,
         stat: x.stat_label, side: cn.side || (x.hot_level ? 'over' : 'under'),
         line: cn.line !== undefined ? cn.line : x.vegas_line,

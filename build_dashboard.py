@@ -912,6 +912,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .impact-hurt {{ background: rgba(248,81,73,0.18); color:#ff8f89; }}
   .impact-soft {{ opacity: 0.55; }}
   .ladder-tag {{ background: rgba(63,185,80,0.20); color:#7ee08a; margin-left:5px; cursor: default; }}
+  .top-panel {{ margin: 14px 0 6px; }}
+  .top-head {{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:6px; }}
+  .top-head h2 {{ font-size: 17px; margin: 0; }}
+  .top-table tr[data-player] {{ cursor: pointer; }}
+  body.board-collapsed .full-board {{ display: none !important; }}
   .ladder-player {{ color: var(--text); font-weight:600; text-decoration: underline dotted; }}
   .ladder-rung {{ display:inline-block; margin:2px 4px 2px 0; padding:1px 6px; border:1px solid var(--border); border-radius:6px; font-size:12px; white-space:nowrap; }}
   .cov-header {{ padding: 4px 0 14px 0; color: var(--muted); font-size: 13px; }}
@@ -957,7 +962,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <button type="button" id="ladderBoardBtn" class="pos-btn" style="margin-left:6px;" title="The week's likeliest players to go off, with every rung's chance and fair price.">&#129692; Ladder board</button>
     <span id="syncCtl" style="display:none; margin-left:10px;"></span>
   </div>
-  <div class="controls">
+  <div id="topPanel" class="top-panel"></div>
+  <div class="controls full-board">
     <span class="muted" id="pickyLabel"></span>
     <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;">
       <input type="checkbox" id="hideMarkedX" checked> Hide &#10060; rows
@@ -982,13 +988,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       Signals: <select id="signalMode" class="mark-select" style="max-width:none;"><option value="consistency">Consistency (hit rates)</option><option value="edge">Average edge</option></select>
     </label>
   </div>
-  <div class="controls">
+  <div class="controls full-board">
     <span class="muted">Stat:</span>
     <button class="stat-btn active" data-stat="ALL">All</button>
     {stat_buttons}
   </div>
   <div id="gameScriptPanel" class="gs-panel" style="display:none;"></div>
-  <table id="tbl">
+  <table id="tbl" class="full-board">
     <thead>
       <tr>
         <th data-key="mark_rank" title="Click to sort: &#9989; bets first, then &#127765; watching, then unmarked, then &#10060; passes. Your own marker for this bet -- &#9989; if you've bet it, &#127765; if you're still watching it, &#10060; if you're passing. This is separate from &#128293;/&#129482;/&#10067; (which this dashboard computes for you); it's yours, saved in this browser only, and survives a data refresh (python3 run.py) since it isn't part of the regenerated file. Use the 'Hide &#10060; rows' checkbox above to get passed-on rows out of the way. Pick &#9989; Bet it and a slip appears where you can record the side, line, and odds you actually got (the grey hints are just today's best available line/price).">Mark</th>
@@ -1040,7 +1046,8 @@ const WEEK = {week};
 const ODDS_TIME = "{odds_time}";
 const ODDS_TIME_UTC = "{odds_time_utc}"; // same moment, with timezone, for "Lines Xm old"
 const SEASON = {season};
-const RULE_NUMS = {rule_nums_json}; // Python-side thresholds, for the My rules page
+const RULE_NUMS = {rule_nums_json};
+const TRACK_RECORD = {track_record_json}; // results/track_record.json, graded weekly by lookback.yml // Python-side thresholds, for the My rules page
 const TOTAL_WEEKS = 18;
 let activePos = "ALL";
 let activeStat = "ALL";
@@ -4323,6 +4330,7 @@ function render() {{
   tbody.innerHTML = html;
   applyColumnLayout();
   renderGameScriptPanel();
+  renderTopPanel();
 }}
 
 // --- Player detail modal: click any player's name to see every stat this
@@ -4798,7 +4806,7 @@ document.getElementById('tbody').addEventListener('click', (e) => {{
 // render() rebuild of tbody's HTML, same pattern as the click handler
 // above. Re-renders after saving so a newly-❌'d row can disappear right
 // away when "Hide ❌ rows" is checked.
-document.getElementById('tbody').addEventListener('change', (e) => {{
+function onMarkChange(e) {{
   const betEl = e.target.closest('.bet-field');
   if (betEl) {{ handleBetField(betEl); return; }}
   const sel = e.target.closest('.mark-select');
@@ -4811,7 +4819,8 @@ document.getElementById('tbody').addEventListener('change', (e) => {{
   if (sel.value === 'pass') {{ openPassReason(key); return; }}
   if (sel.value !== 'pass' && MARKS['why|' + key]) {{ delete MARKS['why|' + key]; saveMarks(); }}
   render();
-}});
+}}
+document.getElementById('tbody').addEventListener('change', onMarkChange);
 
 // Filter checkboxes remember their state (added 2026-10-16, per Trevor:
 // "whenever i reload the page, hide x rows is checked but the x still show
@@ -5746,6 +5755,143 @@ function blowoutGamesText(r) {{
   return out.length ? ` His ${{r.stat_label}} in his team’s blowout wins: ${{out.join(', ')}}.` : '';
 }}
 
+// ---- ⭐ Top 3 + 🔍 Review list (2026-11-09, per Trevor: "i want to basically
+// have 3 must bets per week that seem to have been proven so far ... a list
+// of bets to analyze ... 15ish ... i'm feeling overwhelmed by the options").
+// Every row with a side gets ONE group (pickGroup), and each group's real
+// record from the weekly look-backs (TRACK_RECORD, written by lookback.yml)
+// becomes its estimated win chance, shrunk toward 50% (TOP_PRIOR games of a
+// coin flip) so a 3-0 group can't jump the line. Value = that chance minus
+// the break-even of the bet's price. Top 3 = the best values that clear the
+// bar (TOP_MIN_P and TOP_MIN_VALUE, at most one per game; can be fewer, per
+// Trevor: "only show ones that clear the bar"); Review = the next REVIEW_SIZE.
+// The rest of the board sits under "Show full board". Only the Top 3 buzz.
+const TOP_PRIOR = 20;
+const TOP_MIN_P = 0.56;
+const TOP_MIN_VALUE = 0.02;
+const TOP_SIZE = 3;
+const REVIEW_SIZE = 15;
+const PICK_GROUPS = {{
+  must2: 'Two signals agree (MUST BET rule)',
+  target3: '🎯 line looks low/high (3-star)',
+  streak3: 'Streak 3-star',
+  priced: 'Streak pick priced past -130',
+  idea_near: '💡 near-miss 2-star',
+  idea_target: '💡 🎯 outlier defense',
+  idea_script: '💡 game script',
+  idea_blowout: '💡 backup RB blowout upside',
+  review_role: '❓ role change',
+  review_matchup: '❓ matchup question',
+  review_low: '❓ 1-2 star',
+  review_other: '❓ other',
+}};
+function pickGroup(e) {{
+  if (e.must_pick) return 'must2';
+  if (e.outlier_promo) return 'target3';
+  if (Math.max(e.hot_level || 0, e.cold_level || 0) >= 3) return 'streak3';
+  if (e.suppressed_by && e.cons) return 'priced';
+  if (e.idea_reason) {{
+    const i = e.idea_reason;
+    return /blowout/.test(i) ? 'idea_blowout' : /outlier|line looks/.test(i) ? 'idea_target' : /2-star/.test(i) ? 'idea_near' : /script/.test(i) ? 'idea_script' : null;
+  }}
+  if (e.needs_review && e.cons) {{
+    const w = e.review_reason || '';
+    return /^Role change/.test(w) ? 'review_role' : /^Matchup/.test(w) ? 'review_matchup' : /below the 3-star bar/.test(w) ? 'review_low' : 'review_other';
+  }}
+  return null;
+}}
+// The bet this row stands for: its side, line and price.
+function pickBet(e) {{
+  const p = e.must_pick || e.outlier_promo;
+  if (p) return {{ side: p.side, line: p.line, price: p.price, book: p.book }};
+  const c = e.cons;
+  if (!c) return null;
+  const side = (e.hot_level || e.cold_level) ? (e.hot_level ? 'over' : 'under') : c.side;
+  const m = bestMarketFor(e, side);
+  return m ? {{ side, line: m.line, price: m.price, book: m.book }} : null;
+}}
+function groupRecord(g) {{
+  let w = 0, l = 0;
+  for (const wk of Object.values((TRACK_RECORD && TRACK_RECORD.weeks) || {{}})) {{
+    const x = wk[g];
+    if (x) {{ w += x[0]; l += x[1]; }}
+  }}
+  return {{ w, l, p: (w + TOP_PRIOR * 0.5) / (w + l + TOP_PRIOR) }};
+}}
+var _topCache = null;
+function topPicks() {{
+  if (_topCache) return _topCache;
+  const dc = {{}}, cands = [];
+  for (const r of ROWS) {{
+    const e = enrichRow(r, selectedWeeks, dc);
+    if (MARKS[markKey(e)] === 'pass') continue;
+    const g = pickGroup(e);
+    if (!g) continue;
+    const bet = pickBet(e);
+    if (!bet || bet.price === null || bet.price === undefined) continue;
+    const rec = groupRecord(g);
+    const need = impliedProb(bet.price);
+    cands.push({{ e, g, bet, rec, p: rec.p, need, value: rec.p - need }});
+  }}
+  cands.sort((a, b) => (b.value - a.value) || (b.p - a.p));
+  const top = [], games = new Set(), used = new Set();
+  for (const c of cands) {{
+    if (top.length >= TOP_SIZE) break;
+    if (c.p < TOP_MIN_P || c.value < TOP_MIN_VALUE || games.has(gameKey(c.e))) continue;
+    top.push(c); games.add(gameKey(c.e)); used.add(markKey(c.e));
+  }}
+  const review = [];
+  for (const c of cands) {{
+    if (review.length >= REVIEW_SIZE) break;
+    if (used.has(markKey(c.e)) || c.value <= 0) continue;
+    review.push(c); used.add(markKey(c.e));
+  }}
+  return (_topCache = {{ top, review }});
+}}
+const fmtPrice = v => (v > 0 ? '+' + v : String(v));
+function topRowHtml(c, n) {{
+  const e = c.e, b = c.bet;
+  const recTxt = c.rec.w + c.rec.l ? `${{c.rec.w}}-${{c.rec.l}}` : 'no record yet';
+  const tip = `${{PICK_GROUPS[c.g]}}: ${{recTxt}} in the weekly look-backs -> ${{Math.round(c.p * 100)}}% estimated (shrunk toward 50%). This price needs ${{Math.round(c.need * 100)}}%.`
+    + (e.must_why ? '\\n- ' + e.must_why.join('\\n- ') : '') + (e.review_reason ? '\\n\\n' + e.review_reason : '') + (e.idea_reason ? '\\n\\n' + e.idea_reason : '');
+  return `<tr data-player="${{escapeHtml(e.player)}}" title="${{escapeHtml(tip)}}"><td>${{n}}</td><td>${{markSelect(e)}}</td>`
+    + `<td class="player-cell">${{escapeHtml(e.player)}} <span class="muted">${{e.position}} ${{e.team}} ${{e.at_opponent ? '@' : 'vs'}} ${{e.opponent}}</span></td>`
+    + `<td><b>${{b.side === 'over' ? 'Over' : 'Under'}} ${{b.line}}</b> ${{escapeHtml(e.stat_label)}} <span class="muted">${{fmtPrice(b.price)}} ${{b.book || ''}}</span></td>`
+    + `<td><b>${{Math.round(c.p * 100)}}%</b> <span class="muted">/ ${{Math.round(c.need * 100)}}%</span></td>`
+    + `<td class="muted" style="white-space:normal;">${{escapeHtml(PICK_GROUPS[c.g])}} <span>(${{recTxt}})</span></td></tr>`;
+}}
+function renderTopPanel() {{
+  const el = document.getElementById('topPanel');
+  if (!el) return;
+  _topCache = null;
+  const {{ top, review }} = topPicks();
+  const head = '<thead><tr><th>#</th><th>Mark</th><th>Player</th><th>Bet</th><th title="Estimated win chance (from this kind of pick&#39;s graded record) / what the price needs to break even">Win / need</th><th>Why (record so far)</th></tr></thead>';
+  el.innerHTML = `<div class="top-head"><h2>&#11088; Top ${{TOP_SIZE}} this week</h2><span class="muted">${{top.length ? 'Only picks that clear the bar: ' + Math.round(TOP_MIN_P * 100) + '%+ estimated and ' + Math.round(TOP_MIN_VALUE * 100) + '+ points better than the price needs. These are the only phone alerts.' : 'Nothing clears the bar right now -- check back after more lines post (most go up Thursday-Sunday).'}}</span></div>`
+    + (top.length ? `<table class="modal-table top-table">${{head}}<tbody>${{top.map((c, i) => topRowHtml(c, i + 1)).join('')}}</tbody></table>` : '')
+    + `<div class="top-head" style="margin-top:14px;"><h2>&#128269; Review (${{review.length}})</h2><span class="muted">The next best -- worth your own look before betting. Hover a row for why.</span></div>`
+    + (review.length ? `<table class="modal-table top-table">${{head}}<tbody>${{review.map((c, i) => topRowHtml(c, i + 1)).join('')}}</tbody></table>` : '<p class="muted">Nothing yet.</p>')
+    + `<button type="button" id="fullBoardBtn" class="pos-btn" style="margin-top:12px;">${{fullBoardOpen ? '&#9650; Hide full board' : '&#9660; Show full board'}}</button>`;
+}}
+var fullBoardOpen = false;
+try {{ fullBoardOpen = localStorage.getItem('nfl_prop_dashboard_fullboard_v1') === '1'; }} catch (err) {{}}
+function applyFullBoard() {{
+  document.body.classList.toggle('board-collapsed', !fullBoardOpen);
+}}
+document.addEventListener('click', ev => {{
+  if (!ev.target.closest('#fullBoardBtn')) return;
+  fullBoardOpen = !fullBoardOpen;
+  try {{ localStorage.setItem('nfl_prop_dashboard_fullboard_v1', fullBoardOpen ? '1' : '0'); }} catch (err) {{}}
+  applyFullBoard();
+  renderTopPanel();
+}});
+document.getElementById('topPanel').addEventListener('change', onMarkChange);
+document.getElementById('topPanel').addEventListener('click', ev => {{
+  if (ev.target.closest('.mark-select, button')) return;
+  const tr = ev.target.closest('tr[data-player]');
+  if (tr) openPlayerModal(tr.dataset.player);
+}});
+applyFullBoard();
+
 render();
 initSync();
 </script>
@@ -5773,6 +5919,15 @@ def odds_time_utc(odds):
         return datetime.fromisoformat(odds["generated_at"]).astimezone(timezone.utc).isoformat()
     except Exception:
         return ""
+
+
+def load_track_record():
+    """results/track_record.json: each week's W-L per pick group (Top 3 / Review)."""
+    path = Path(__file__).resolve().parent / "results" / "track_record.json"
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {"weeks": {}}
 
 
 def main():
@@ -5828,6 +5983,7 @@ def main():
         team_results_json=json.dumps(stats.get("team_results", [])),
         injuries_by_team_json=json.dumps(injuries_by_team),
         board_switch_html=board_switch_html(),
+        track_record_json=json.dumps(load_track_record()),
         rule_nums_json=json.dumps({"impact_snap": IMPACT_SNAP_PCT, "rb_carry_share": RB_CARRY_SHARE_ROLE, "trade_settle": TRADE_SETTLE_GAMES}),
         supabase_config_json=json.dumps(
             {"url": SUPABASE_URL, "key": SUPABASE_ANON_KEY} if SUPABASE_URL and SUPABASE_ANON_KEY else None
