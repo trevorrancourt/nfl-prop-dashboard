@@ -1,4 +1,101 @@
 {
-  "note": "Each week's graded record per pick group (W, L), written by lookback.yml. The board turns these into each group's estimated win chance for the Top 3 and Review lists.",
-  "weeks": {}
+ "note": "Each week's graded record per pick group (W, L) from the look-back (scripts/lookback.py). Weeks 8-9 seeded 2026-11-09 (Week 7's saved boards had expired). The board turns these into each group's estimated win chance for the Top 3 and Review lists.",
+ "weeks": {
+  "8": {
+   "idea_blowout": [
+    2,
+    2
+   ],
+   "idea_near": [
+    18,
+    11
+   ],
+   "idea_script": [
+    1,
+    1
+   ],
+   "idea_target": [
+    3,
+    1
+   ],
+   "must2": [
+    1,
+    1
+   ],
+   "priced": [
+    9,
+    13
+   ],
+   "review_low": [
+    5,
+    7
+   ],
+   "review_matchup": [
+    6,
+    12
+   ],
+   "review_other": [
+    24,
+    19
+   ],
+   "review_role": [
+    12,
+    12
+   ],
+   "streak3": [
+    8,
+    5
+   ],
+   "target3": [
+    4,
+    4
+   ]
+  },
+  "9": {
+   "idea_near": [
+    16,
+    19
+   ],
+   "idea_script": [
+    2,
+    4
+   ],
+   "idea_target": [
+    0,
+    2
+   ],
+   "must2": [
+    0,
+    1
+   ],
+   "priced": [
+    22,
+    12
+   ],
+   "review_low": [
+    4,
+    7
+   ],
+   "review_matchup": [
+    6,
+    11
+   ],
+   "review_other": [
+    24,
+    17
+   ],
+   "review_role": [
+    10,
+    12
+   ],
+   "streak3": [
+    3,
+    7
+   ],
+   "target3": [
+    4,
+    2
+   ]
+  }
+ }
 }

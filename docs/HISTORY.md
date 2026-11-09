@@ -3489,3 +3489,20 @@ Trevor: "1-4 on must bets is horrible", then "i basically want to be notified wh
   - ⭐ MUST BET = 2+ of {streak 3-star, 🎯 line looks low/high, 🪜 Ladder board pick} on one side, with no flags and a price of -130 or better.
   - With median test lines: 1 MUST (Jeanty Rush U27.5: streak + 🎯) out of 39 top-tier rows.
 - **"Why pass?":** the picker on ❌ saves the reason in the synced marks, for a later "were your passes right, by reason" look-back. Told Trevor plainly that it learns only by grading his reasons over weeks (small data), not by any automatic learning.
+
+## Top 3 + Review lists (2026-11-09)
+
+Trevor: "zoom out ... 3 must bets per week that seem to have been proven so far ... 15ish that seem very good and i need to analyze ... i'm feeling overwhelmed by the options". He chose: only show Top 3 picks that clear the bar.
+
+- **Groups:** every row with a side gets one `pickGroup()`.
+- **Estimated chance:** `(W + 10) / (W + L + 20)` from `results/track_record.json` (`TOP_PRIOR` 20).
+- **Value:** the estimate minus the price's break-even.
+- **Top 3:** p ≥ 56% and value ≥ 2 points, one per game; can be fewer. Phone alerts come from it only (`check_must_bets.py` → `topPicks()`).
+- **Review:** the next 15 with positive value.
+- **Full board:** collapsed behind "Show full board" (`nfl_prop_dashboard_fullboard_v1`).
+- **Track record:** seeded from Weeks 8-9 (Week 7's boards had expired). Weeks 8+9 by group:
+  - review_other 48-36, priced 31-25, target3 8-6, idea_near 34-30.
+  - streak3 11-12, review_role 22-24, must2 1-2.
+  - review_low 9-14, review_matchup 12-23.
+  - Best estimate 55.8%, so **nothing clears the 56% bar yet**. Told Trevor honestly.
+- **Weekly updates:** a scheduled look-back that commits the record was blocked as unapproved automation. For now, Claude re-grades and updates the file when asked.
