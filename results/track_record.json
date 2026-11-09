@@ -1,5 +1,5 @@
 {
- "note": "Graded record (W, L) per pick group at the closing line, from scripts/real_line_study.py. Seeded 2026-11-09 with Weeks 4-6 only (Trevor's Mac boards), so Weeks 7-9 can test the Top 3 / Review lists out of sample; add later weeks as they're graded.",
+ "note": "Graded record (W, L) per pick group at the closing line, from scripts/real_line_study.py (Weeks 4-6 from Trevor's Mac boards, 7-9 from the archived GitHub boards). Add each new week after it's graded.",
  "weeks": {
   "4-6": {
    "idea_blowout": [
@@ -57,6 +57,64 @@
    "target3": [
     11,
     12
+   ]
+  },
+  "7-9": {
+   "idea_blowout": [
+    2,
+    2
+   ],
+   "idea_near": [
+    23,
+    29
+   ],
+   "idea_script": [
+    4,
+    4
+   ],
+   "idea_target": [
+    3,
+    3
+   ],
+   "must_market": [
+    26,
+    14
+   ],
+   "priced": [
+    31,
+    20
+   ],
+   "proj_over": [
+    162,
+    155
+   ],
+   "proj_under": [
+    174,
+    129
+   ],
+   "review_low": [
+    7,
+    11
+   ],
+   "review_matchup": [
+    10,
+    7
+   ],
+   "review_other": [
+    44,
+    52
+   ],
+   "review_role": [
+    15,
+    20
+   ],
+   "streak3": [
+    19,
+    23
+   ],
+   "target3": [
+    17,
+    10
    ]
   }
  }

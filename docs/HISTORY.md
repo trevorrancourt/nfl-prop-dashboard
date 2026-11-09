@@ -3563,3 +3563,26 @@ Trevor: "reanalyze how we're doing things ... remember my goal is to make 60% ..
   - review_matchup (26-8 vs 22-29)
 - **Other groups pooled:** streak3 36-29, 🎯 target3 27-21, 💡🎯 idea_target 15-9, must2 2-5.
 - **Line moves:** the Over at the opening line when the line later rose hit .493 (vs .545 in Weeks 7-9); the Under at open when it fell .513 (vs .570).
+
+## Rebuild from the study: MUST BET, lists, out-of-sample test (2026-11-09)
+
+Trevor: "go with the changes. any other suggestions? Also can we test the bet review logic changes?"
+
+- **MUST BET** = streak pick + the books agree (price -131..-170). Weeks 4-6 by price band:
+  - -131..-150: 20-9, +18%
+  - -151..-170: 12-3, +30%
+  - -171..-200: 9-5, -1%
+  - past -200: 6-4, -15%
+- **Projection groups (Weeks 4-6):** under (≤0.73×) 142-104; over (≥1.5×) 130-103.
+- **Fair test:** `track_record.json` was seeded with Weeks 4-6 only, then the lists were graded on Weeks 7-9.
+  - must_market 26-14 +10%, proj_under 174-129 +6%, target3 17-10 +21%.
+  - Failed: proj_over 162-155 -4%, streak3 19-23 -15%.
+  - The first `topPicks()` ranked every group by value: Top 3 2-9 (-55%). Small groups at cheap prices (review_matchup 9-3 in 4-6) jumped the line.
+  - Fixed with `TOP_GROUPS` / `REVIEW_GROUPS`: **Top 3 9-3 (+30%), Review 20-18 (+9%)**, out of sample.
+- **Retired:** two-signal MUST, the Win % column (hidden). Review shrank to 10. Weeks 7-9 records then added to the track record.
+- **Other suggestions given:**
+  - more books (as understood, Odds API cost is per market, up to 10 books = 1 region; verify on one pull)
+  - number discipline
+  - flat stakes / ROI
+  - bet MUST BETs early (lines moved toward the books' lean)
+  - Tuesday routine
