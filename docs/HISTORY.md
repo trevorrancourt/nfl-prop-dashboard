@@ -3461,3 +3461,20 @@ Built:
 - Fair prices per rung, and a My rules entry.
 - With median test lines the board mixed WR/RB/QB, e.g. KC Concepcion rec yds 37.5: 18% to reach 80+.
 - Not graded on real lines yet; the look-back can be extended to grade the board.
+
+## Look back: Week 9 (2026-11-09, MNF excluded)
+
+Trevor: "how did the overall algorithm fair last week". Look-back now also grades the 🎯 3-stars and the 🪜 Ladder board. The ladder board was replayed with the new model on the real pre-kickoff lines, a true out-of-sample test.
+
+**Week 9:**
+- Picks: MUST 0-2, 3-star 7-8, 💡 20-25, ❓ 44-47.
+- Blocked: not top-10 matchup 21-26, price 8-4, role change 5-0, mismatch 1-3, untested 2-0.
+- 🎯 promoted 3-stars 4-2. 🎯 on its side: all 12-8, unflagged 6-3.
+- Win % edge buckets: <0 -12.5u, 0-3 +13.0u, 3-10 -3.8u, 10+ -12.1u.
+- Ladder board: 15 picks, 2 went off (13%; the board said 18%) vs 6% of the 332 eligible rows (Golden 164 rec yds, Watson 171). Rung calibration good below 45%, but the 54-63% calls hit 30-39% (small n).
+
+**Weeks 7-9 combined:**
+- Picks: MUST 1-4, 3-star 22-21, 💡 84-67 (56%).
+- Unflagged 🎯 on its side: 28-13.
+- Blocked by the top-10 matchup rule: 68-67, so loosening it wouldn't help. Blocked by price: 20-10.
+- Win % edge units: <0 -8.9, 0-3 +13.8, 3-10 -16.6, 10+ -23.8. Bigger edges did worse, so the column isn't working yet.
