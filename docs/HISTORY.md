@@ -3506,3 +3506,46 @@ Trevor: "zoom out ... 3 must bets per week that seem to have been proven so far 
   - review_low 9-14, review_matchup 12-23.
   - Best estimate 55.8%, so **nothing clears the 56% bar yet**. Told Trevor honestly.
 - **Weekly updates:** a scheduled look-back that commits the record was blocked as unapproved automation. For now, Claude re-grades and updates the file when asked.
+
+## Real-line study, Weeks 7-9 (2026-11-09)
+
+Trevor: "reanalyze how we're doing things ... remember my goal is to make 60% ... take your time", and he OK'd the job change ("OK, change the grading job and run the stu[dy]").
+
+`scripts/real_line_study.py` is run via `lookback.yml` with `study_weeks`, and grades every prop with a saved line. 1,738 props, graded at the closing consensus line (last board before kickoff); opening = first board that week with the prop.
+
+**A. Market**
+- Over hit 46.7% overall, so **Unders 53.3%**.
+- Unders by stat: completions 58%, pass TDs 58%, receptions 54.6%, rush yds 54.9%, rec yds 52.2%. Overs won only on INTs (54%) and pass yds (52%).
+- The books' no-vig Over chance runs high: said .377/.428/.491/.511 → happened .274/.379/.471/.462. Calibrated only where the Over was a clear favorite (.569 → .592).
+
+**B. Line moves**
+- 484 up, 419 down, 835 unchanged; median 94h from first line seen to close.
+- When the line rose, the Over at the opening line hit 54.5%. When it fell, the Under at the opening line hit 57.0%.
+- Unchanged lines: Over 45.7%.
+
+**C. Single signals (Over rate at the closing line, by quintile)**
+- Flat / no edge:
+  - his hit rate o_prate (Q1 49.3%, Q5 50.4%)
+  - Win % model pmodel_over (48.4% → 50.3%)
+  - defense softness (44.5% → 49.7%)
+- Overs failing where the books had raised the line:
+  - teammate volume out (vac Q5 39.1%, line rose 70%)
+  - rising usage (Q4 39.5%)
+  - high game total 49.5+ (40.8%)
+  - top ladder candidates (41.3%)
+  - books' Over chance under .47 (36.2%)
+- Line-based gaps (form/season/anticipated vs line) are partly mechanical, since they're measured against the closing line.
+
+**D. Multivariate on top of the market's log-odds**
+- No signal reached |z| 2. The intercept is -0.13 (z -2.6), i.e. the Under lean.
+- Log loss .6853 → .6787.
+
+**E. Board groups at real lines**
+- 🎯 target3 16-9 (64%); priced (blocked by -130) 57-34 (63%, juiced).
+- streak3 19-20, idea_near 48-47, review_other 66-63, review_role 34-35, review_matchup 22-29, review_low 14-24, must2 1-4.
+
+**Conclusions told to Trevor**
+- The hit-rate/streak engine has no edge at real lines.
+- The robust effect is Unders (public Over bias; books over-raise lines on news, usage and shootouts).
+- Trevor's own bets were 55 of 60 Overs.
+- 3 weeks, with games correlated, so re-check Weeks 10+ before trusting it fully.
