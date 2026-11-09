@@ -5737,6 +5737,7 @@ function myRulesHtml() {{
   const sec = (title, items) => `<h3 class="modal-section-title">${{title}}</h3><ul style="margin:4px 0 10px 18px; padding:0;">${{items.map(li).join('')}}</ul>`;
   return sec('The groups', [
       '<b>&#11088; MUST BET</b> -- a streak pick the books agree with: he and the defense have been on that side (any streak level), and the books charge extra juice on it, between ' + (MAX_JUICE_PRICE - 1) + ' and ' + MUST_JUICE_MIN + '. In the Weeks 4-9 study those went 65%, and made money up to -170 (not beyond). No role change or lead-back blowout. These are the Top 3 candidates and the phone alerts. A plain streak at a cheap price is only a 3-star (it went 36-29).',
+      '<b>⭐ Top 3 / 🔍 Review:</b> the Top 3 come only from MUST BETs (least juice first, one per game, only if they clear the bar). Review = the next best from MUST BETs, 📏 projection-under picks and 🎯 3-stars -- the groups that held up when tested on weeks they weren\u2019t built from. Everything else is under Show full board.',
       '<b>📏 Projection gaps (Review list):</b> Anticipated 27%+ under the line -> Under (about 57%), 50%+ over -> Over (about 55%); the one number that leaned the same way in both halves of the study.',
       '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
       '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
@@ -5802,6 +5803,13 @@ function blowoutGamesText(r) {{
 // Trevor: "only show ones that clear the bar"); Review = the next REVIEW_SIZE.
 // The rest of the board sits under "Show full board". Only the Top 3 buzz.
 const TOP_PRIOR = 20;
+// Which groups may fill the lists (2026-11-09, after the out-of-sample test:
+// ranking every group by its record put small, lucky groups on top and the
+// Top 3 went 2-9 in Weeks 7-9). Top 3 = only the MUST BET group (26-14 out
+// of sample), least juice first. Review = groups that held up in BOTH
+// halves of the study, or are the MUST BET overflow.
+const TOP_GROUPS = ['must_market'];
+const REVIEW_GROUPS = ['must_market', 'proj_under', 'target3'];
 const TOP_MIN_P = 0.56;
 const TOP_MIN_VALUE = 0.02;
 const TOP_SIZE = 3;
@@ -5882,7 +5890,7 @@ function topPicks() {{
     const e = enrichRow(r, selectedWeeks, dc);
     if (MARKS[markKey(e)] === 'pass') continue;
     const g = pickGroup(e);
-    if (!g) continue;
+    if (!g || !REVIEW_GROUPS.includes(g)) continue;
     const bet = pickBet(e);
     if (!bet || bet.price === null || bet.price === undefined) continue;
     const rec = groupRecord(g);
@@ -5893,7 +5901,7 @@ function topPicks() {{
   const top = [], games = new Set(), used = new Set();
   for (const c of cands) {{
     if (top.length >= TOP_SIZE) break;
-    if (c.p < TOP_MIN_P || c.value < TOP_MIN_VALUE || games.has(gameKey(c.e))) continue;
+    if (!TOP_GROUPS.includes(c.g) || c.p < TOP_MIN_P || c.value < TOP_MIN_VALUE || games.has(gameKey(c.e))) continue;
     top.push(c); games.add(gameKey(c.e)); used.add(markKey(c.e));
   }}
   const review = [];
