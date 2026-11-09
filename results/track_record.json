@@ -1,100 +1,62 @@
 {
- "note": "Each week's graded record per pick group (W, L) from the look-back (scripts/lookback.py). Weeks 8-9 seeded 2026-11-09 (Week 7's saved boards had expired). The board turns these into each group's estimated win chance for the Top 3 and Review lists.",
+ "note": "Graded record (W, L) per pick group at the closing line, from scripts/real_line_study.py. Seeded 2026-11-09 with Weeks 4-6 only (Trevor's Mac boards), so Weeks 7-9 can test the Top 3 / Review lists out of sample; add later weeks as they're graded.",
  "weeks": {
-  "8": {
+  "4-6": {
    "idea_blowout": [
-    2,
-    2
+    3,
+    3
    ],
    "idea_near": [
-    18,
-    11
+    15,
+    14
    ],
    "idea_script": [
-    1,
-    1
+    4,
+    2
    ],
    "idea_target": [
     3,
-    1
+    3
    ],
-   "must2": [
-    1,
-    1
-   ],
-   "priced": [
-    9,
-    13
-   ],
-   "review_low": [
-    5,
-    7
-   ],
-   "review_matchup": [
-    6,
-    12
-   ],
-   "review_other": [
+   "must_market": [
     24,
-    19
-   ],
-   "review_role": [
-    12,
-    12
-   ],
-   "streak3": [
-    8,
-    5
-   ],
-   "target3": [
-    4,
-    4
-   ]
-  },
-  "9": {
-   "idea_near": [
-    16,
-    19
-   ],
-   "idea_script": [
-    2,
-    4
-   ],
-   "idea_target": [
-    0,
-    2
-   ],
-   "must2": [
-    0,
-    1
+    8
    ],
    "priced": [
     22,
-    12
+    13
+   ],
+   "proj_over": [
+    121,
+    94
+   ],
+   "proj_under": [
+    119,
+    82
    ],
    "review_low": [
-    4,
-    7
+    8,
+    5
    ],
    "review_matchup": [
-    6,
-    11
+    9,
+    3
    ],
    "review_other": [
-    24,
-    17
+    32,
+    32
    ],
    "review_role": [
-    10,
-    12
+    8,
+    14
    ],
    "streak3": [
-    3,
-    7
+    18,
+    10
    ],
    "target3": [
-    4,
-    2
+    11,
+    12
    ]
   }
  }

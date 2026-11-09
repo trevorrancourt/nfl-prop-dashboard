@@ -46,6 +46,10 @@ BOOKS = ("draftkings", "fanduel", "betmgm")
 STUDY_JS = r"""(keys) => {
   const dc = {}; const out = [];
   const sw = seasonWeeks();
+  const tp = (typeof topPicks === 'function') ? topPicks() : { top: [], review: [] };
+  const tier = {};
+  tp.top.forEach(c => { tier[markKey(c.e)] = 'top'; });
+  tp.review.forEach(c => { tier[markKey(c.e)] = 'review'; });
   const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
   for (const r of ROWS) {
     if (r.vegas_line === null || r.vegas_line === undefined || !keys.includes(gameKey(r))) continue;
@@ -80,6 +84,7 @@ STUDY_JS = r"""(keys) => {
       inj: e.injury ? e.injury.status : null, role: e.lookback ? e.lookback.role : null,
       grp: (typeof pickGroup === 'function') ? pickGroup(e) : null,
       bet: (typeof pickBet === 'function') ? pickBet(e) : null,
+      tier: tier[markKey(e)] || null,
     });
   }
   return out;
@@ -291,7 +296,20 @@ def main():
     for g, x in df[df.grp.notna()].groupby("grp"):
         w = [((r.actual > r.bet["line"]) if r.bet["side"] == "over" else (r.actual < r.bet["line"])) for r in x.itertuples() if isinstance(r.bet, dict) and r.actual != r.bet["line"]]
         toward = [((r.move > 0) if r.bet["side"] == "over" else (r.move < 0)) for r in x.itertuples() if isinstance(r.bet, dict) and r.open_line is not None and not math.isnan(r.move) and r.move != 0]
-        L.append(f"  {g:16s} {sum(w)}-{len(w) - sum(w)}  ({(sum(w) / len(w) if w else 0):.0%})   line moved toward it {sum(toward)}/{len(toward)}")
+        dec = lambda o: 1 + o / 100 if o > 0 else 1 + 100 / abs(o)
+        pr = [((r.actual > r.bet["line"]) if r.bet["side"] == "over" else (r.actual < r.bet["line"]), r.bet["price"]) for r in x.itertuples()
+              if isinstance(r.bet, dict) and r.bet.get("price") is not None and r.actual != r.bet["line"]]
+        roi = sum((dec(p) - 1) if ok else -1 for ok, p in pr) / len(pr) if pr else 0
+        L.append(f"  {g:16s} {sum(w)}-{len(w) - sum(w)}  ({(sum(w) / len(w) if w else 0):.0%})  ROI {roi:+.0%}   line moved toward it {sum(toward)}/{len(toward)}")
+    # The lists themselves, as the page builds them from this board (Top 3 / Review).
+    for t in ("top", "review"):
+        x = df[df.tier == t] if "tier" in df else df.iloc[0:0]
+        pr = [((r.actual > r.bet["line"]) if r.bet["side"] == "over" else (r.actual < r.bet["line"]), r.bet["price"]) for r in x.itertuples()
+              if isinstance(r.bet, dict) and r.bet.get("price") is not None and r.actual != r.bet["line"]]
+        if pr:
+            dec = lambda o: 1 + o / 100 if o > 0 else 1 + 100 / abs(o)
+            wins = sum(ok for ok, _ in pr)
+            L.append(f"  LIST {'Top 3' if t == 'top' else 'Review'}: {wins}-{len(pr) - wins}  ROI {sum((dec(p) - 1) if ok else -1 for ok, p in pr) / len(pr):+.0%}")
 
     text = "\n".join(L)
     print(text)

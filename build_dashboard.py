@@ -917,6 +917,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .top-head h2 {{ font-size: 17px; margin: 0; }}
   .top-table tr[data-player] {{ cursor: pointer; }}
   body.board-collapsed .full-board {{ display: none !important; }}
+  .win-col {{ display: none; }} /* Win % column hidden 2026-11-09: no edge at real lines (Weeks 4-9 study) */
   .ladder-player {{ color: var(--text); font-weight:600; text-decoration: underline dotted; }}
   .ladder-rung {{ display:inline-block; margin:2px 4px 2px 0; padding:1px 6px; border:1px solid var(--border); border-radius:6px; font-size:12px; white-space:nowrap; }}
   .cov-header {{ padding: 4px 0 14px 0; color: var(--muted); font-size: 13px; }}
@@ -1013,7 +1014,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <th data-key="edge" title="Recent Avg minus the most advantageous available line for whichever side (Over/Under) Recent Avg favors -- the lowest DK/FanDuel/BetMGM line for an Over, the highest for an Under. That book is highlighted in green below. Falls back to the consensus line if Recent Avg ties it exactly.">Edge</th>
         <th data-key="anc_edge" title="Anticipated minus that same shopped line -- Edge and Anc. Edge are graded against the same book/number, since they're two ways of sizing up one candidate bet.">Anc. Edge</th>
         <th data-key="signal_rank" title="1-3 &#128293; = Edge and Anc. Edge both significantly positive (a good OVER candidate) -- more flames means a bigger agreed-upon edge. 1-3 &#129482; = the mirror image, both significantly negative (a good UNDER candidate). &#11088; MUST BET = a 4th, much rarer tier above 3 -- both Edge and Anc. Edge clear a FIXED, deliberately extreme bar (100% -- recent form running at 2x the sportsbook's own line) in the same direction, AND the player has never landed on the wrong side of that line anywhere in your selected weeks, AND the matchup fits (Over: opponent is one of the 10 defenses allowing the most of this stat; Under: one of the 10 allowing the least), AND his games are consistent (standard deviation no more than 50% of the line). 3 flames/ice need the same matchup and consistency, otherwise they're held at 2 (marked with a small arrow). This bar does NOT move with the &quot;How picky&quot; slider below -- Trevor's ask was that MUST BET always mean the same absurd thing, while 1/2/3 stars keep flexing with the slider. &#10067; = one of Edge/Anc. Edge is significant on its own and the other isn't confirming it, but also isn't contradicting it (not on the opposite side of zero) -- worth a look. This is the table's default sort: MUST BET rows first, then 3-flame/3-ice, then 2s, then 1s, then &#10067;, then everything else.">&#128293;/&#129482;/&#11088;</th>
-        <th data-key="win_edge" title="Estimated chance to win the better side (O/U), then the break-even % its best price needs, then the edge (estimate minus break-even). Built from the market's juice-free odds, a projection model and his season hit rate. Hover a cell for the breakdown. Sort by this to see the best values first. An estimate, not proven yet.">Win % / Need / Edge</th>
+        <th data-key="win_edge" class="win-col" title="Estimated chance to win the better side (O/U), then the break-even % its best price needs, then the edge (estimate minus break-even). Built from the market's juice-free odds, a projection model and his season hit rate. Hover a cell for the breakdown. Sort by this to see the best values first. An estimate, not proven yet.">Win % / Need / Edge</th>
         <th data-key="draftkings_line">DraftKings</th>
         <th data-key="fanduel_line">FanDuel</th>
         <th data-key="betmgm_line">BetMGM</th>
@@ -2519,6 +2520,7 @@ function applyPickySetting() {{
 // prices (plus money) always pass, since they require LESS than 50% to
 // break even, which is the best case for a bettor, not the worst.
 const MAX_JUICE_PRICE = -130;
+const MUST_JUICE_MIN = -170; // MUST BETs: the books' price on his side between -131 and -170 (2026-11-09 study)
 
 // American odds -> implied win probability (what the book's price says
 // you'd need to hit at just to break even, before even accounting for
@@ -2646,7 +2648,7 @@ function signalEmoji(r) {{
   if (r.hot_level === 4 || r.cold_level === 4) {{
     const side = r.hot_level === 4 ? 'Over' : 'Under';
     const bar = Math.round(MUST_BET_EDGE_PCT * 100);
-    const title = r.must_why ? `MUST BET -- two separate signals agree on the ${{side}} (${{r.must_pick.line}} at ${{r.must_pick.price > 0 ? '+' : ''}}${{r.must_pick.price}}, ${{r.must_pick.book}}):\\n- ${{r.must_why.join('\\n- ')}}` : SIGNAL_MODE === 'consistency' && r.cons ? `MUST BET (consistency): he cleared ${{r.cons.side}} ${{r.cons.line}} in EVERY game (${{fmtHit(r.cons.pHits, r.cons.pGames)}}), ${{r.opponent}} allowed it in EVERY game (${{fmtHit(r.cons.dHits, r.cons.dGames)}}), and ${{r.opponent}} is one of the 10 defenses allowing the ${{r.cons.side === 'over' ? 'most' : 'least'}} of this stat.` : `Edge AND Anc. Edge both clear a FIXED ${{bar}}% bar on the ${{side}} -- the rarest, highest-conviction tier on this page (above the usual 3-flame/3-ice max). Unlike 1-3 flame/ice, this bar does not move with the "How picky" slider -- it's meant to always mean the same absurd thing. It also requires a perfect record over your selected weeks -- zero games where the player landed on the wrong side of the line -- so a single bad week always blocks it, no matter how big the average edge looks. And the matchup has to fit (an Over needs a defense in the 10 that allow the most of this stat, an Under one of the 10 that allow the least), and his games can't swing more than ${{Math.round(MAX_TIER3_REL_SD * 100)}}% of the line.`;
+    const title = r.must_why ? `MUST BET -- a streak the books agree with, on the ${{side}} (${{r.must_pick.line}} at ${{r.must_pick.price > 0 ? '+' : ''}}${{r.must_pick.price}}, ${{r.must_pick.book}}):\\n- ${{r.must_why.join('\\n- ')}}` : SIGNAL_MODE === 'consistency' && r.cons ? `MUST BET (consistency): he cleared ${{r.cons.side}} ${{r.cons.line}} in EVERY game (${{fmtHit(r.cons.pHits, r.cons.pGames)}}), ${{r.opponent}} allowed it in EVERY game (${{fmtHit(r.cons.dHits, r.cons.dGames)}}), and ${{r.opponent}} is one of the 10 defenses allowing the ${{r.cons.side === 'over' ? 'most' : 'least'}} of this stat.` : `Edge AND Anc. Edge both clear a FIXED ${{bar}}% bar on the ${{side}} -- the rarest, highest-conviction tier on this page (above the usual 3-flame/3-ice max). Unlike 1-3 flame/ice, this bar does not move with the "How picky" slider -- it's meant to always mean the same absurd thing. It also requires a perfect record over your selected weeks -- zero games where the player landed on the wrong side of the line -- so a single bad week always blocks it, no matter how big the average edge looks. And the matchup has to fit (an Over needs a defense in the 10 that allow the most of this stat, an Under one of the 10 that allow the least), and his games can't swing more than ${{Math.round(MAX_TIER3_REL_SD * 100)}}% of the line.`;
     return `<span class="cov-tag mustbet-tag" title="${{escapeHtml(title)}}">&#11088; MUST BET</span>` + roleTag(r);
   }}
   if (r.hot_level > 0) return tierEmojiSpan('\U0001F525'.repeat(r.hot_level), r);
@@ -4163,24 +4165,26 @@ function enrichRow(r, weeks, defCache) {{
     }}
   }}
 
-  // ⭐ MUST BET = two separate signals agree on the same side (2026-11-09,
-  // per Trevor: "i basically want to be notified whenever there is a true
-  // must bet"). The signals: a streak 3-star (perfect him, defense 75%+,
-  // top-10 matchup), 🎯 line looks low/high on that side, and a 🪜 Ladder
-  // board pick (Overs). No role/blowout/mismatch flag, price -130 or better.
+  // ⭐ MUST BET = a streak pick the books agree with (2026-11-09, per Trevor:
+  // "go with the changes", after the Weeks 4-9 real-line study). A streak
+  // signal (any level) whose own side is priced past MAX_JUICE_PRICE: the
+  // books are charging extra on the side he keeps clearing. Those went
+  // 103-55 (65%) over Weeks 4-9; at -131..-170 they made money (Weeks 4-6:
+  // 32-12, ROI about +20%), past -170 they didn't. A plain streak at a cheap
+  // price was a coin flip (36-29). Role changes and the blowout rule still
+  // keep a row out, per Trevor's standing rules; matchup mismatches never get
+  // here (their level is 0 before the price check).
   let mustWhy = null, mustPick = null;
-  if (SIGNAL_MODE === 'consistency' && !roleChanges.length && !mismatchFlag && !blowoutFlag && !backupBlowout) {{
-    const sig = {{ over: [], under: [] }};
-    const streakSide = outlierPromo ? null : (hotLevel >= 3 ? 'over' : (coldLevel >= 3 ? 'under' : null));
-    if (streakSide && cons) sig[streakSide].push(`streak: he cleared ${{cons.side}} ${{cons.line}} in ${{fmtHit(cons.pHits, cons.pGames)}}, ${{r.opponent}} allowed it in ${{fmtHit(cons.dHits, cons.dGames)}}`);
-    if (outlierValue) sig[outlierDef.side].push(outlierValue);
-    const lp = ladderPick(r);
-    if (lp) sig.over.push(`🪜 Ladder board: ${{Math.round(lp.info.goff * 100)}}% to reach ${{lp.info.target}}+`);
-    for (const side of ['over', 'under']) {{
-      if (sig[side].length < 2) continue;
-      const m = bestMarketFor(r, side);
-      if (!m || m.price < MAX_JUICE_PRICE) continue;
-      mustWhy = sig[side];
+  const leadBackBlowout = r.rb_lead && (r.stat_col === 'rushing_yards' || r.stat_col === 'carries') && cons && cons.side === 'over'
+    && (tbTeamSpread(r, tbGame(r)) || 0) >= BLOWOUT_FAV;
+  if (SIGNAL_MODE === 'consistency' && suppressedBy && cons && cons.market && !roleChanges.length && !leadBackBlowout) {{
+    const side = cons.side;
+    const m = cons.market;
+    if (m.price >= MUST_JUICE_MIN && m.price < MAX_JUICE_PRICE) {{
+      mustWhy = [
+        `streak: he went ${{side}} ${{cons.line}} in ${{fmtHit(cons.pHits, cons.pGames)}}; ${{r.opponent}} allowed it in ${{fmtHit(cons.dHits, cons.dGames)}}`,
+        `the books agree: ${{m.price}} on the ${{side === 'over' ? 'Over' : 'Under'}} (${{m.book}}) -- extra juice on the side he keeps clearing`,
+      ];
       mustPick = {{ side, line: m.line, price: m.price, book: m.book }};
       if (side === 'over') {{ hotLevel = 4; coldLevel = 0; }} else {{ coldLevel = 4; hotLevel = 0; }}
       ideaReason = null;
@@ -4346,7 +4350,7 @@ function render() {{
       <td class="${{edgeClass(r.edge_pct)}}">${{fmt(r.edge)}}</td>
       <td class="${{edgeClass(r.anc_edge_pct)}}">${{fmt(r.anc_edge)}}</td>
       <td>${{signalEmoji(r)}}${{fullYearTag(r)}}${{scriptTag(r)}}</td>
-      <td>${{winCellHtml(r)}}</td>
+      <td class="win-col">${{winCellHtml(r)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.draftkings_line, bookCellPrice(r, 'draftkings'), r.show_side || r.direction)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.fanduel_line, bookCellPrice(r, 'fanduel'), r.show_side || r.direction)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'betmgm' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'betmgm' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.betmgm_line, bookCellPrice(r, 'betmgm'), r.show_side || r.direction)}}</td>
@@ -4494,7 +4498,7 @@ function openPlayerModal(playerName) {{
       <td class="${{edgeClass(r.edge_pct)}}">${{fmt(r.edge)}}</td>
       <td class="${{edgeClass(r.anc_edge_pct)}}">${{fmt(r.anc_edge)}}</td>
       <td>${{signalEmoji(r)}}${{fullYearTag(r)}}${{scriptTag(r)}}</td>
-      <td>${{winCellHtml(r)}}</td>
+      <td class="win-col">${{winCellHtml(r)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.draftkings_line, bookCellPrice(r, 'draftkings'), r.show_side || r.direction)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.fanduel_line, bookCellPrice(r, 'fanduel'), r.show_side || r.direction)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'betmgm' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'betmgm' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.betmgm_line, bookCellPrice(r, 'betmgm'), r.show_side || r.direction)}}</td>
@@ -4605,7 +4609,7 @@ function openPlayerModal(playerName) {{
     <table class="modal-table">
       <thead><tr>
         <th>Mark</th><th>Stat</th><th>Avg (${{weeksLabel(selectedWeeks)}})</th><th>Opp Allows</th><th>Opp Rank</th><th>Hit</th><th>Opp Hit</th>
-        <th>Team Share</th><th>Anticipated</th><th>Edge</th><th>Anc. Edge</th><th>&#128293;/&#129482;/&#11088;</th><th>Win % / Need / Edge</th>
+        <th>Team Share</th><th>Anticipated</th><th>Edge</th><th>Anc. Edge</th><th>&#128293;/&#129482;/&#11088;</th><th class="win-col">Win % / Need / Edge</th>
         <th>DraftKings</th><th>FanDuel</th><th>BetMGM</th>
       </tr></thead>
       <tbody>${{summaryHtml}}</tbody>
@@ -5732,10 +5736,11 @@ function myRulesHtml() {{
   const li = s => `<li style="margin:3px 0;">${{s}}</li>`;
   const sec = (title, items) => `<h3 class="modal-section-title">${{title}}</h3><ul style="margin:4px 0 10px 18px; padding:0;">${{items.map(li).join('')}}</ul>`;
   return sec('The groups', [
-      '<b>&#11088; MUST BET</b> -- two separate signals agree on the same side: a streak 3-star, 🎯 line looks low/high, or a 🪜 Ladder board pick (Overs). No role change, blowout or matchup flag, and a price of ' + MAX_JUICE_PRICE + ' or better. Since Nov 9: a perfect streak alone went 13-11 in Weeks 7-9, so it\u2019s a 3-star now, not a MUST BET.',
+      '<b>&#11088; MUST BET</b> -- a streak pick the books agree with: he and the defense have been on that side (any streak level), and the books charge extra juice on it, between ' + (MAX_JUICE_PRICE - 1) + ' and ' + MUST_JUICE_MIN + '. In the Weeks 4-9 study those went 65%, and made money up to -170 (not beyond). No role change or lead-back blowout. These are the Top 3 candidates and the phone alerts. A plain streak at a cheap price is only a 3-star (it went 36-29).',
+      '<b>📏 Projection gaps (Review list):</b> Anticipated 27%+ under the line -> Under (about 57%), 50%+ over -> Over (about 55%); the one number that leaned the same way in both halves of the study.',
       '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
       '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
-      '<b>Win % / Need / Edge:</b> an estimated chance to win the better side: starts from the books\u2019 odds with the juice removed, moves part of the way toward a projection model (Poisson for catches/TDs, normal for attempts/carries, a skewed curve for yards) and his season hit rate at that line -- how much each counts per stat was tuned on 66,000 games from 2019-2025 (e.g. QB passing leans on the projection, receiving on the hit rate). In that test, its 57% calls won 57% and its 64% calls won 66%. Need = the break-even % of the best price; Edge = the difference: green +' + WIN_EDGE_GOOD * 100 + ' to +' + WIN_EDGE_CHECK * 100 + ' (if you like it, go), amber \u26a0 over +' + WIN_EDGE_CHECK * 100 + ' (check news first), gray 0 to +' + WIN_EDGE_GOOD * 100 + ', red negative. Context only -- it doesn\u2019t change picks or alerts, and it isn\u2019t proven yet.',
+      '<b>Win % / Need / Edge (hidden since Nov 9 -- in the Weeks 4-9 study it didn\u2019t predict results at real lines):</b> an estimated chance to win the better side: starts from the books\u2019 odds with the juice removed, moves part of the way toward a projection model (Poisson for catches/TDs, normal for attempts/carries, a skewed curve for yards) and his season hit rate at that line -- how much each counts per stat was tuned on 66,000 games from 2019-2025 (e.g. QB passing leans on the projection, receiving on the hit rate). In that test, its 57% calls won 57% and its 64% calls won 66%. Need = the break-even % of the best price; Edge = the difference: green +' + WIN_EDGE_GOOD * 100 + ' to +' + WIN_EDGE_CHECK * 100 + ' (if you like it, go), amber \u26a0 over +' + WIN_EDGE_CHECK * 100 + ' (check news first), gray 0 to +' + WIN_EDGE_GOOD * 100 + ', red negative. Context only -- it doesn\u2019t change picks or alerts, and it isn\u2019t proven yet.',
       '<b>📅 Full year agrees:</b> shown next to the signal when the same side and line also holds over the whole season -- he and this defense both ' + Math.round(CONS_TIERS[1] * 100) + '%+ (after excused misses). A flag only; grades still follow the selected weeks.',
       '<b>🎯 Outlier defense:</b> one of the ' + OUTLIER_DEF_TOP + ' defenses allowing the most (or least) for the whole season, for RB Rush Yds and WR/TE Receptions only (where it held up in 2019-2025 tests). Shown as 🎯 O / 🎯 U next to the player name; turns a ❓ on that side into 💡, never a 3-star. If the line also looks off for that matchup (Anticipated ' + Math.round((OUTLIER_VALUE_RATIO - 1) * 100) + '%+ past it), the row becomes a 3-star on the 🎯 side (since Nov 3, after going 22-10 in the Week 7-8 look-back) -- unless it has a role change, blowout or matchup flag, or the price is worse than ' + MAX_JUICE_PRICE + ' (then it stays 💡). Never a MUST BET.',
       '<b>🪜 Ladder board:</b> the ' + LADDER_BOARD_SIZE + ' players likeliest to go off this week (climb several rungs past the line: yards line + 40 or 60%, catches +3 or 60%, pass yards +75 or 30%), from recent form vs the line, how much this defense allows his position, rising usage, teammates out and his boom history. Each rung gets a chance and a fair price to compare with the book\u2019s alt odds. Tested on 2019-2025: a weekly top 10 went off 32% of the time vs 12% overall. Game script and man/zone fit were tested and didn\u2019t help, so they\u2019re left out. Context only -- never alerted.',
@@ -5800,9 +5805,11 @@ const TOP_PRIOR = 20;
 const TOP_MIN_P = 0.56;
 const TOP_MIN_VALUE = 0.02;
 const TOP_SIZE = 3;
-const REVIEW_SIZE = 15;
+const REVIEW_SIZE = 10;
 const PICK_GROUPS = {{
-  must2: 'Two signals agree (MUST BET rule)',
+  must_market: 'MUST BET: streak + the books agree (-131 to -170)',
+  proj_under: 'Projection 27%+ under the line (Under)',
+  proj_over: 'Projection 50%+ over the line (Over)',
   target3: '🎯 line looks low/high (3-star)',
   streak3: 'Streak 3-star',
   priced: 'Streak pick priced past -130',
@@ -5816,10 +5823,12 @@ const PICK_GROUPS = {{
   review_other: '❓ other',
 }};
 function pickGroup(e) {{
-  if (e.must_pick) return 'must2';
+  if (e.must_pick) return 'must_market';
   if (e.outlier_promo) return 'target3';
   if (Math.max(e.hot_level || 0, e.cold_level || 0) >= 3) return 'streak3';
   if (e.suppressed_by && e.cons) return 'priced';
+  const pg = projGap(e);
+  if (pg) return pg.group;
   if (e.idea_reason) {{
     const i = e.idea_reason;
     return /blowout/.test(i) ? 'idea_blowout' : /outlier|line looks/.test(i) ? 'idea_target' : /2-star/.test(i) ? 'idea_near' : /script/.test(i) ? 'idea_script' : null;
@@ -5831,9 +5840,26 @@ function pickGroup(e) {{
   return null;
 }}
 // The bet this row stands for: its side, line and price.
+// Projection (Anticipated) far from the line: the one board number that
+// leaned the same way in both halves of the study (Weeks 4-6 and 7-9).
+// Under when it's 27%+ below the line (about 57%), Over when 50%+ above (54-56%).
+const PROJ_UNDER_RATIO = 0.73;
+const PROJ_OVER_RATIO = 1.5;
+function projGap(e) {{
+  const line = e.vegas_line;
+  if (e.anticipated === null || e.anticipated === undefined || line === null || line === undefined || line <= 0) return null;
+  if (e.anticipated <= PROJ_UNDER_RATIO * line) return {{ group: 'proj_under', side: 'under' }};
+  if (e.anticipated >= PROJ_OVER_RATIO * line) return {{ group: 'proj_over', side: 'over' }};
+  return null;
+}}
 function pickBet(e) {{
   const p = e.must_pick || e.outlier_promo;
   if (p) return {{ side: p.side, line: p.line, price: p.price, book: p.book }};
+  const g = pickGroup(e);
+  if (g === 'proj_under' || g === 'proj_over') {{
+    const m = bestMarketFor(e, g === 'proj_under' ? 'under' : 'over');
+    return m ? {{ side: g === 'proj_under' ? 'under' : 'over', line: m.line, price: m.price, book: m.book }} : null;
+  }}
   const c = e.cons;
   if (!c) return null;
   const side = (e.hot_level || e.cold_level) ? (e.hot_level ? 'over' : 'under') : c.side;
