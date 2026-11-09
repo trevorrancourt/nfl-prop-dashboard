@@ -2152,6 +2152,39 @@ const MARK_OPTIONS = [
   {{ value: 'parlay', label: '🔗 Parlay' }},
 ];
 const MARK_EMOJI = {{ bet: '✅', watch: '🌕', pass: '❌', parlay: '🔗' }};
+// Why you passed (2026-11-09, per Trevor: "would it help if there was a place
+// where when i chose to pass, why i did? would that learn my behavior?").
+// Saved as MARKS['why|' + mark key] (synced with the rest of the marks), so
+// later look-backs can grade the board's picks you passed on, by reason,
+// and turn the reasons that keep being right into rules.
+const PASS_REASONS = [
+  ['injury', '🩹 Injury / role news'],
+  ['line_moved', '📉 Line moved / bad number'],
+  ['matchup', '🛡️ Don\u2019t trust the matchup'],
+  ['script', '🎬 Game script worries me'],
+  ['volume', '📊 Volume / usage too thin'],
+  ['exposure', '🔗 Already have enough on this game'],
+  ['gut', '🤷 Gut -- just don\u2019t like it'],
+  ['other', '✏️ Other'],
+];
+function openPassReason(key) {{
+  closePlayerModal();
+  const m = parseBetKey(key);
+  document.getElementById('modalPlayerName').textContent = 'Why pass?';
+  document.getElementById('modalMeta').textContent = `${{m.player}} · ${{statLabelFor(m.stat_col)}} -- one tap, so later look-backs can check whether your passes were right`;
+  document.getElementById('modalBody').innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:8px;">'
+    + PASS_REASONS.map(([v, label]) => `<button type="button" class="pos-btn pass-reason" data-key="${{escapeHtml(key)}}" data-reason="${{v}}">${{label}}</button>`).join('')
+    + `<button type="button" class="pos-btn pass-reason" data-key="${{escapeHtml(key)}}" data-reason="">Skip</button></div>`;
+  document.getElementById('playerModalOverlay').style.display = 'flex';
+}}
+document.addEventListener('click', e => {{
+  const b = e.target.closest('.pass-reason');
+  if (!b) return;
+  if (b.dataset.reason) MARKS['why|' + b.dataset.key] = b.dataset.reason; else delete MARKS['why|' + b.dataset.key];
+  saveMarks();
+  closePlayerModal();
+  render();
+}});
 // ---- Parlays (added 2026-10-16, per Trevor: "make a new status for
 // parlay ... don't add it to my bets ... unless you have a way where i can
 // select which parlays i combined in the my bets screen and what odds i
@@ -2580,7 +2613,7 @@ function signalEmoji(r) {{
   if (r.hot_level === 4 || r.cold_level === 4) {{
     const side = r.hot_level === 4 ? 'Over' : 'Under';
     const bar = Math.round(MUST_BET_EDGE_PCT * 100);
-    const title = SIGNAL_MODE === 'consistency' && r.cons ? `MUST BET (consistency): he cleared ${{r.cons.side}} ${{r.cons.line}} in EVERY game (${{fmtHit(r.cons.pHits, r.cons.pGames)}}), ${{r.opponent}} allowed it in EVERY game (${{fmtHit(r.cons.dHits, r.cons.dGames)}}), and ${{r.opponent}} is one of the 10 defenses allowing the ${{r.cons.side === 'over' ? 'most' : 'least'}} of this stat.` : `Edge AND Anc. Edge both clear a FIXED ${{bar}}% bar on the ${{side}} -- the rarest, highest-conviction tier on this page (above the usual 3-flame/3-ice max). Unlike 1-3 flame/ice, this bar does not move with the "How picky" slider -- it's meant to always mean the same absurd thing. It also requires a perfect record over your selected weeks -- zero games where the player landed on the wrong side of the line -- so a single bad week always blocks it, no matter how big the average edge looks. And the matchup has to fit (an Over needs a defense in the 10 that allow the most of this stat, an Under one of the 10 that allow the least), and his games can't swing more than ${{Math.round(MAX_TIER3_REL_SD * 100)}}% of the line.`;
+    const title = r.must_why ? `MUST BET -- two separate signals agree on the ${{side}} (${{r.must_pick.line}} at ${{r.must_pick.price > 0 ? '+' : ''}}${{r.must_pick.price}}, ${{r.must_pick.book}}):\\n- ${{r.must_why.join('\\n- ')}}` : SIGNAL_MODE === 'consistency' && r.cons ? `MUST BET (consistency): he cleared ${{r.cons.side}} ${{r.cons.line}} in EVERY game (${{fmtHit(r.cons.pHits, r.cons.pGames)}}), ${{r.opponent}} allowed it in EVERY game (${{fmtHit(r.cons.dHits, r.cons.dGames)}}), and ${{r.opponent}} is one of the 10 defenses allowing the ${{r.cons.side === 'over' ? 'most' : 'least'}} of this stat.` : `Edge AND Anc. Edge both clear a FIXED ${{bar}}% bar on the ${{side}} -- the rarest, highest-conviction tier on this page (above the usual 3-flame/3-ice max). Unlike 1-3 flame/ice, this bar does not move with the "How picky" slider -- it's meant to always mean the same absurd thing. It also requires a perfect record over your selected weeks -- zero games where the player landed on the wrong side of the line -- so a single bad week always blocks it, no matter how big the average edge looks. And the matchup has to fit (an Over needs a defense in the 10 that allow the most of this stat, an Under one of the 10 that allow the least), and his games can't swing more than ${{Math.round(MAX_TIER3_REL_SD * 100)}}% of the line.`;
     return `<span class="cov-tag mustbet-tag" title="${{escapeHtml(title)}}">&#11088; MUST BET</span>` + roleTag(r);
   }}
   if (r.hot_level > 0) return tierEmojiSpan('\U0001F525'.repeat(r.hot_level), r);
@@ -3813,6 +3846,10 @@ function enrichRow(r, weeks, defCache) {{
     if (perfect && d >= CONS_TIERS[1]) lvl = 3;
     if (perfect && d === 1 && cons.pHits === cons.pGames && cons.pGames >= consMustMinGames(weeks) && cons.dGames - cons.dExcused >= consMustMinGames(weeks)) lvl = 4;
     lbRaw = lvl;
+    // A perfect streak alone is a 3-star now, not a MUST BET (2026-11-09,
+    // per Trevor after a 1-4 run: every "perfect both sides" row in Weeks
+    // 7-9 went 13-11). MUST BET needs two signals -- see mustWhy below.
+    if (lvl === 4) lvl = 3;
     if (lvl >= 3) {{
       const mOk = mbRank !== null && (cons.side === 'over' ? mbRank > mbMax - MUST_BET_MATCHUP_TOP : mbRank <= MUST_BET_MATCHUP_TOP);
       if (!mOk) {{
@@ -4093,6 +4130,30 @@ function enrichRow(r, weeks, defCache) {{
     }}
   }}
 
+  // ⭐ MUST BET = two separate signals agree on the same side (2026-11-09,
+  // per Trevor: "i basically want to be notified whenever there is a true
+  // must bet"). The signals: a streak 3-star (perfect him, defense 75%+,
+  // top-10 matchup), 🎯 line looks low/high on that side, and a 🪜 Ladder
+  // board pick (Overs). No role/blowout/mismatch flag, price -130 or better.
+  let mustWhy = null, mustPick = null;
+  if (SIGNAL_MODE === 'consistency' && !roleChanges.length && !mismatchFlag && !blowoutFlag && !backupBlowout) {{
+    const sig = {{ over: [], under: [] }};
+    const streakSide = outlierPromo ? null : (hotLevel >= 3 ? 'over' : (coldLevel >= 3 ? 'under' : null));
+    if (streakSide && cons) sig[streakSide].push(`streak: he cleared ${{cons.side}} ${{cons.line}} in ${{fmtHit(cons.pHits, cons.pGames)}}, ${{r.opponent}} allowed it in ${{fmtHit(cons.dHits, cons.dGames)}}`);
+    if (outlierValue) sig[outlierDef.side].push(outlierValue);
+    const lp = ladderPick(r);
+    if (lp) sig.over.push(`🪜 Ladder board: ${{Math.round(lp.info.goff * 100)}}% to reach ${{lp.info.target}}+`);
+    for (const side of ['over', 'under']) {{
+      if (sig[side].length < 2) continue;
+      const m = bestMarketFor(r, side);
+      if (!m || m.price < MAX_JUICE_PRICE) continue;
+      mustWhy = sig[side];
+      mustPick = {{ side, line: m.line, price: m.price, book: m.book }};
+      if (side === 'over') {{ hotLevel = 4; coldLevel = 0; }} else {{ coldLevel = 4; hotLevel = 0; }}
+      ideaReason = null;
+    }}
+  }}
+
   // 📅 Full year agrees (2026-10-31, per Trevor: "if it's also supported by
   // full year stats, it's flagged"). Same hit-rate check on every played
   // week this season, same side and line: both him and this defense at
@@ -4131,7 +4192,7 @@ function enrichRow(r, weeks, defCache) {{
     anc_edge_pct: ancEdgePct,
     hot: hot,
     cold: cold,
-    needs_review: needsReview && !outlierPromo,
+    needs_review: needsReview && !outlierPromo && !mustPick,
     idea_reason: ideaReason,
     outlier_def: outlierDef,
     outlier_value: outlierValue,
@@ -4141,7 +4202,9 @@ function enrichRow(r, weeks, defCache) {{
     cold_level: coldLevel,
     signal: signal,
     outlier_promo: outlierPromo,
-    signal_rank: outlierPromo ? 6 : (ideaReason ? 5 : signalRank), // 💡 sorts between 3-star (6) and ❓ (3)
+    must_why: mustWhy,
+    must_pick: mustPick,
+    signal_rank: mustPick ? 7 : (outlierPromo || hotLevel === 3 || coldLevel === 3) ? 6 : (ideaReason ? 5 : signalRank), // 💡 sorts between 3-star (6) and ❓ (3)
     tier_sd: tierSd,
     tier_rel_sd: tierRelSd,
     tier_cap_reason: tierCapReason,
@@ -4745,6 +4808,8 @@ document.getElementById('tbody').addEventListener('change', (e) => {{
   saveMarks();
   if (sel.value === 'bet') {{ ensureBetMeta(key); snapshotMarket(key); saveBets(); }}
   if (sel.value === 'parlay') {{ ensureBetMeta(key); saveBets(); }}
+  if (sel.value === 'pass') {{ openPassReason(key); return; }}
+  if (sel.value !== 'pass' && MARKS['why|' + key]) {{ delete MARKS['why|' + key]; saveMarks(); }}
   render();
 }});
 
@@ -5628,7 +5693,7 @@ function myRulesHtml() {{
   const li = s => `<li style="margin:3px 0;">${{s}}</li>`;
   const sec = (title, items) => `<h3 class="modal-section-title">${{title}}</h3><ul style="margin:4px 0 10px 18px; padding:0;">${{items.map(li).join('')}}</ul>`;
   return sec('The groups', [
-      '<b>&#11088; MUST BET</b> -- bet it. He cleared the line in every game and the defense allowed it in every game (' + CONS_MUST_MIN_GAMES + '+ games each), against one of the ' + MUST_BET_MATCHUP_TOP + ' defenses allowing the most (Over) / least (Under) of that stat.',
+      '<b>&#11088; MUST BET</b> -- two separate signals agree on the same side: a streak 3-star, 🎯 line looks low/high, or a 🪜 Ladder board pick (Overs). No role change, blowout or matchup flag, and a price of ' + MAX_JUICE_PRICE + ' or better. Since Nov 9: a perfect streak alone went 13-11 in Weeks 7-9, so it\u2019s a 3-star now, not a MUST BET.',
       '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
       '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
       '<b>Win % / Need / Edge:</b> an estimated chance to win the better side: starts from the books\u2019 odds with the juice removed, moves part of the way toward a projection model (Poisson for catches/TDs, normal for attempts/carries, a skewed curve for yards) and his season hit rate at that line -- how much each counts per stat was tuned on 66,000 games from 2019-2025 (e.g. QB passing leans on the projection, receiving on the hit rate). In that test, its 57% calls won 57% and its 64% calls won 66%. Need = the break-even % of the best price; Edge = the difference: green +' + WIN_EDGE_GOOD * 100 + ' to +' + WIN_EDGE_CHECK * 100 + ' (if you like it, go), amber \u26a0 over +' + WIN_EDGE_CHECK * 100 + ' (check news first), gray 0 to +' + WIN_EDGE_GOOD * 100 + ', red negative. Context only -- it doesn\u2019t change picks or alerts, and it isn\u2019t proven yet.',

@@ -35,7 +35,7 @@ JS = r"""
     linesPosted: rows.filter(x => x.vegas_line !== null && x.vegas_line !== undefined).length,
     picks: pick.map(x => {
       // 🎯 3-stars (2026-11-03) aren't streak picks: use their own side/line/price.
-      const op = x.outlier_promo;
+      const op = x.must_pick || x.outlier_promo; // MUST BET (two signals) or 🎯 3-star: their own side/line/price
       const cn = op ? { side: op.side, line: op.line, market: { price: op.price, book: op.book } } : (x.cons || {});
       const m = cn.market || null;
       return {

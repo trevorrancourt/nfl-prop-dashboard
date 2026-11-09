@@ -74,7 +74,7 @@ It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of
   - 1 = player and defense both ≥75% but player not perfect (→ ❓).
   - 2 = player perfect and defense ≥2/3 (→ ❓).
   - 3 = player perfect, defense ≥75%, and a top-10 matchup (otherwise capped at 2).
-  - ⭐ MUST BET = both sides perfect, 4+ games each, top-10 matchup (Over: one of the 10 defenses allowing the most; Under: one of the 10 allowing the least).
+  - ⭐ MUST BET (**reworked 2026-11-09**, per Trevor after a 1-4 run: "i basically want to be notified whenever there is a true must bet") = **two separate signals agree on the same side** (`mustWhy` / `r.must_pick` in enrichRow): a streak 3-star, 🎯 line looks low/high (`outlierValue`), and a 🪜 Ladder board pick (Overs). It also needs no role/blowout/mismatch flag and a price of -130 or better. The old "both sides perfect, 4+ games, top-10 matchup" is now just a 3-star (those rows went 13-11 in Weeks 7-9). Alerts use `must_pick`'s side/line/price.
   - Price gate: worse than -130 blocks a signal.
 - **Excused misses:**
   - A player's miss doesn't count against a top-10 tough defense (top-10 soft for an Under; `EXCUSE_TOUGH_TOP`, raised from 5 on 2026-10-16 per Trevor).
@@ -106,7 +106,7 @@ It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of
 - **Context only, not picks:** game script panel/popup (🎬), Second-look checklist, ladder 🪜, injury impact 🩹. In backtests only game script beat a coin flip (58%), on a small sample. Be honest about small samples; the consistency theory is not proven yet.
 
 ## Browser storage (per browser; the main thing to build next)
-- Marks: `nfl_prop_dashboard_marks_v1`
+- Marks: `nfl_prop_dashboard_marks_v1`. Picking ❌ Pass opens a one-tap "Why pass?" picker (`PASS_REASONS`: injury, line moved, matchup, script, volume, exposure, gut, other; 2026-11-09, per Trevor: "would it help if there was a place where when i chose to pass, why i did?"). It's saved as `MARKS['why|' + key]` and synced, so look-backs can grade his passes by reason later (not built yet; the look-back would need the `SUPABASE_SERVICE_KEY` to read marks).
 - Bets: `nfl_prop_dashboard_bets_v1` (key = `WEEK|player|team|stat_col`)
 - Columns: `nfl_prop_dashboard_cols_v1`
 - Filter checkboxes (Hide ❓, Ladder, Alt lines, Weak/Strong matchup): `nfl_prop_dashboard_filters_v1`. Hide ❌ rows always loads ticked (per Trevor).

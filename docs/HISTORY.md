@@ -3478,3 +3478,14 @@ Trevor: "how did the overall algorithm fair last week". Look-back now also grade
 - Unflagged 🎯 on its side: 28-13.
 - Blocked by the top-10 matchup rule: 68-67, so loosening it wouldn't help. Blocked by price: 20-10.
 - Win % edge units: <0 -8.9, 0-3 +13.8, 3-10 -16.6, 10+ -23.8. Bigger edges did worse, so the column isn't working yet.
+
+## MUST BET reworked + "Why pass?" (2026-11-09)
+
+Trevor: "1-4 on must bets is horrible", then "i basically want to be notified whenever there is a true must bet, feel confident in the ones that i flag ... would it help if there was a place where when i chose to pass, why i did? would that learn my behavior?"
+
+- **Weeks 7-9, every "perfect on both sides" row:** shown as MUST 1-4, blocked by another rule 12-7, all together 13-11 (54%). The streak alone isn't an edge.
+- **Now:**
+  - A perfect streak is a 3-star.
+  - ⭐ MUST BET = 2+ of {streak 3-star, 🎯 line looks low/high, 🪜 Ladder board pick} on one side, with no flags and a price of -130 or better.
+  - With median test lines: 1 MUST (Jeanty Rush U27.5: streak + 🎯) out of 39 top-tier rows.
+- **"Why pass?":** the picker on ❌ saves the reason in the synced marks, for a later "were your passes right, by reason" look-back. Told Trevor plainly that it learns only by grading his reasons over weeks (small data), not by any automatic learning.
