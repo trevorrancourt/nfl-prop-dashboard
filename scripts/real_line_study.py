@@ -134,6 +134,9 @@ def main():
     ap.add_argument("--template", required=True)
     ap.add_argument("--boards", required=True)
     ap.add_argument("--weeks", type=int, nargs="+", required=True)
+    ap.add_argument("--max-stale-hours", type=float, default=36,
+                    help="skip a game when the last board before its kickoff is older than this")
+    ap.add_argument("--dump", help="also write every graded row to this JSON file")
     args = ap.parse_args()
     template = Path(args.template).read_text()
 
@@ -158,8 +161,11 @@ def main():
             print(f"Week {week}: no saved boards, skipped")
             continue
         season = int(wb[0][3]["SEASON"].split("=")[1].strip(" ;"))
-        games = json.loads(wb[-1][3]["GAMES"].split("=", 1)[1].strip().rstrip(";"))
-        ko = {g["key"]: kickoff_utc(g) for g in games}
+        # Every game any board that week listed (a Monday-night-only board can be the last one).
+        ko = {}
+        for b in wb:
+            for g in json.loads(b[3]["GAMES"].split("=", 1)[1].strip().rstrip(";")):
+                ko.setdefault(g["key"], kickoff_utc(g))
         # Opening line per prop: the first board that week that had it.
         opening = {}
         for built, _, f, c in wb:
@@ -173,6 +179,9 @@ def main():
         by_board = defaultdict(list)
         for gk, k in ko.items():
             before = [b for b in wb if k is None or b[0] < k]
+            if before and k is not None and (k - max(b[0] for b in before)).total_seconds() / 3600 > args.max_stale_hours:
+                print(f"  {gk}: last board {(k - max(b[0] for b in before)).total_seconds() / 3600:.0f}h before kickoff -- skipped")
+                continue
             if before:
                 by_board[max(before, key=lambda b: b[0])[0]].append(gk)
         with sync_playwright() as p:
@@ -209,6 +218,8 @@ def main():
             r["actual"] = float(s[r["stat"]]) if s is not None and r["stat"] in s else None
         print(f"Week {week}: {len(wb)} boards, {sum(1 for r in allrows if r['week'] == week)} props with lines")
 
+    if args.dump:
+        Path(args.dump).write_text(json.dumps(allrows))
     df = pd.DataFrame(allrows)
     df = df[df.actual.notna() & (df.actual != df.line)].copy()
     df["over"] = (df.actual > df.line).astype(int)

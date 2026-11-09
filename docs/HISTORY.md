@@ -3549,3 +3549,17 @@ Trevor: "reanalyze how we're doing things ... remember my goal is to make 60% ..
 - The robust effect is Unders (public Over bias; books over-raise lines on news, usage and shootouts).
 - Trevor's own bets were 55 of 60 Overs.
 - 3 weeks, with games correlated, so re-check Weeks 10+ before trusting it fully.
+
+**Weeks 4-6 from Trevor's Mac history folder (same day).** Trevor uploaded `history.zip` (87 boards, Weeks 4-6; no Week 3). Run locally with `real_line_study.py`, which gained `--max-stale-hours 36` (13 Week-6 Sunday games skipped, since the Mac boards stop Oct 15) and `--dump`. Also fixed: the game list is the union over the week's boards (the Mac's last Week-5 board was MNF-only). 1,257 props.
+- **Overs 49.7%**, so the Weeks 7-9 Under lean did NOT repeat. Pooled 4-9 (about 3,000 props): Unders 52.0%, about break-even.
+- **Books' favored Overs:** said .570 → .676 and .629 → .720 (Weeks 7-9: .569 → .592, .628 → .636). But betting every side the books price at 55%+ went 61.8% vs 61.8% needed, ROI +0.3%. 60%+: ROI -9%.
+- **"priced" group** (streak pick blocked only by a price worse than -130): 46-21 (69%), ROI +12.0% at its actual prices. Weeks 7-9: 57-34. Pooled 103-55 (65%), the most consistent board group. The streak works when the books agree with it.
+- **Anticipated vs line** was ordered the same way in both periods: Q1 Over .433/.427, Q5 .560/.522. Weak but consistent.
+- **Inconsistent between periods:**
+  - vacated volume (Q5 .532 vs .391)
+  - usage
+  - total
+  - defense hit rate
+  - review_matchup (26-8 vs 22-29)
+- **Other groups pooled:** streak3 36-29, 🎯 target3 27-21, 💡🎯 idea_target 15-9, must2 2-5.
+- **Line moves:** the Over at the opening line when the line later rose hit .493 (vs .545 in Weeks 7-9); the Under at open when it fell .513 (vs .570).
