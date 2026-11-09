@@ -65,11 +65,14 @@ EVAL_JS = r"""() => {
     out.push({
       player: e.player, team: e.team, opp: e.opponent, game: gameKey(e), stat: e.stat_col, label: e.stat_label,
       group, side: lvl ? (e.hot_level ? 'over' : 'under') : (c ? c.side : null),
-      line: c ? c.line : null, price: c && c.market ? c.market.price : null,
+      line: e.outlier_promo ? e.outlier_promo.line : (c ? c.line : null),
+      price: e.outlier_promo ? e.outlier_promo.price : (c && c.market ? c.market.price : null),
       lb: e.lookback, idea: e.idea_reason || '', why: e.review_reason || '',
       win: e.win ? { side: e.win.side, line: e.win.line, price: e.win.price, edge: e.win.edge, p: e.win.p } : null,
       ov: e.outlier_value ? (() => { const m = bestMarketFor(e, e.outlier_def.side); return m ? { side: e.outlier_def.side, line: m.line, price: m.price } : null; })() : null,
       blocked: (e.lookback.role || e.lookback.blowout || !!e.lookback.mismatch),
+      promo: !!e.outlier_promo,
+      ld: (typeof ladderInfo === 'function') ? (() => { const i = ladderInfo(e); return i ? { goff: i.goff, lift: i.lift, target: i.target, rungs: i.rungs.map(g => [g.t, g.p]), top: !!ladderPick(e) } : null; })() : null,
     });
   }
   return out;
@@ -251,6 +254,28 @@ def main():
         rs = eb.get(k, [])
         u = sum(profit(a, pr) for a, pr in rs)
         lines.append(f"  edge {k:5s} {len(rs):4d}  {rec([a for a, _ in rs])}  {u:+.1f} units")
+
+    pr = [r["res"] for r in rows if r.get("promo") and r["res"]]
+    if pr:
+        lines.append(f"\n🎯 3-stars (promoted 'line looks low'): {rec(pr)}")
+
+    ld = [r for r in rows if r.get("ld") and r["actual"] is not None]
+    if ld:
+        top = [r for r in ld if r["ld"]["top"]]
+        rate = lambda rs: sum(r["actual"] >= r["ld"]["target"] for r in rs) / len(rs) if rs else 0
+        lines.append(f"\n🪜 Ladder board: {len(top)} board picks went off {rate(top):.0%} (board said {sum(r['ld']['goff'] for r in top) / max(len(top), 1):.0%}); all {len(ld)} ladder-eligible rows {rate(ld):.0%}")
+        for r in sorted(top, key=lambda r: -r["ld"]["lift"]):
+            hit = [t for t, _ in r["ld"]["rungs"] if r["actual"] >= t]
+            lines.append(f"    {'GO' if r['actual'] >= r['ld']['target'] else '--'} {r['player']} {r['label']} -> {r['actual']:g} (target {r['ld']['target']}+; rungs hit {len(hit)}/{len(r['ld']['rungs'])})")
+        bins = defaultdict(lambda: [0, 0.0, 0])
+        for r in ld:
+            for t, pp in r["ld"]["rungs"]:
+                b = min(int(pp * 10), 9)
+                bins[b][0] += 1; bins[b][1] += pp; bins[b][2] += int(r["actual"] >= t)
+        lines.append("  Rung calibration (all eligible rows): said -> hit")
+        for b in sorted(bins):
+            n, sp, h = bins[b]
+            lines.append(f"    {sp / n:5.0%} -> {h / n:5.0%}  ({n} rungs)")
 
     lines.append("\nBlocked would-be picks (first 30):")
     allb = sorted((r for rs in blocked.values() for r in rs), key=lambda r: (-r["lb"]["raw"], r["player"]))
