@@ -912,6 +912,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .impact-hurt {{ background: rgba(248,81,73,0.18); color:#ff8f89; }}
   .impact-soft {{ opacity: 0.55; }}
   .ladder-tag {{ background: rgba(63,185,80,0.20); color:#7ee08a; margin-left:5px; cursor: default; }}
+  .ladder-player {{ color: var(--text); font-weight:600; text-decoration: underline dotted; }}
+  .ladder-rung {{ display:inline-block; margin:2px 4px 2px 0; padding:1px 6px; border:1px solid var(--border); border-radius:6px; font-size:12px; white-space:nowrap; }}
   .cov-header {{ padding: 4px 0 14px 0; color: var(--muted); font-size: 13px; }}
   .cov-header strong {{ color: var(--text); }}
 </style>
@@ -952,6 +954,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </span>
     <button type="button" id="myBetsBtn" class="pos-btn" style="margin-left:16px;" title="Every bet you've marked &#9989; (all weeks, not just this one), with result tracking: record, total staked, and profit.">&#128210; My Bets</button>
     <button type="button" id="myRulesBtn" class="pos-btn" style="margin-left:6px;" title="Every rule the board applies, in plain words.">&#128220; My rules</button>
+    <button type="button" id="ladderBoardBtn" class="pos-btn" style="margin-left:6px;" title="The week's likeliest players to go off, with every rung's chance and fair price.">&#129692; Ladder board</button>
     <span id="syncCtl" style="display:none; margin-left:10px;"></span>
   </div>
   <div class="controls">
@@ -963,7 +966,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <input type="checkbox" id="hideReview"> Hide &#10067; rows
     </label>
     <button type="button" id="resetColsBtn" class="pos-btn" style="margin-left:16px;" title="Columns: drag a header to move it, drag the thin bar on a header's right edge to resize it. Your layout is saved in this browser. This puts every column back to its original spot and width.">&#8634; Reset columns</button>
-    <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="Only show rows with a &#129692; Ladder badge -- QB Pass/Rush Yds, RB Rush/Rec Yds, and WR/TE Rec Yds rows where the player's best game this season already cleared 2x their current line (line must be at least 30 to qualify).">
+    <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="Only show this week's &#129692; Ladder board players (the ones likeliest to go off -- see the Ladder board button).">
       <input type="checkbox" id="ladderOnlyFilter"> &#129692; Ladder only
     </label>
     <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="Only show rows with a &#11014;/&#11015; Alt line idea: the projection is 25%+ past the line, and he cleared the suggested alt line in 75%+ of the selected games. Shows them even when Hide &#10067; is ticked. Fun for parlays -- alt odds aren't pulled, so check the price at the book.">
@@ -2705,67 +2708,6 @@ function impactTags(r) {{
   return out;
 }}
 
-// 🪜 Ladder badge -- added 2026-09-24 per Trevor, deliberately kept
-// simple rather than pulling real sportsbook ladder/alternate-line
-// markets: "if a player has gone like over the yardage that their line
-// is by like double or something like that at some point during the
-// year." Flags a player+stat whose single BEST game this season already
-// cleared a fixed multiple of the CURRENT posted line -- a proven
-// ceiling well above what the book is asking right now, using data this
-// dashboard already has (game_log, vegas_line), no new fetch needed.
-//
-// Deliberately scoped to just the volume/yardage stats where "double the
-// line" means something real -- QB Pass/Rush Yds, RB Rush/Rec Yds, WR/TE
-// Rec Yds, per Trevor's exact list. Left out on purpose: low-count stats
-// like TDs/INTs, where a typical 0.5 line makes "2x" trivial (any player
-// who scores at all already clears it), which would make the badge
-// meaningless there.
-//
-// Checks the player's FULL season game_log, not the selected Weeks --
-// this is a "has this ever happened" question about their ceiling, not
-// a recent-form question, so it deliberately ignores the Weeks filter.
-// Compared against r.vegas_line (the current consensus line), not the
-// line-shopped best_line, since "their line" is naturally read as the
-// one flat number currently posted, not a specific book's shopped side.
-//
-// MIN_LADDER_LINE added 2026-09-24 (same day, follow-up): the very first
-// real-data check turned up exactly the thin case flagged when this
-// shipped -- Aaron Rodgers' QB Rush Yds line was 0.5, so his one 5-yard
-// scramble read as "10x the line," which is correct arithmetic but not
-// a real proven ceiling. Trevor's fix: require the CURRENT line itself
-// to be at least 30 (yards) before the ratio check even runs, so a tiny
-// line can't trivially produce a huge, meaningless ratio. This also
-// naturally excludes the low-count stats' worst edge cases even further,
-// on top of the position/stat scoping below.
-const LADDER_STATS = {{
-  QB: ['passing_yards', 'rushing_yards'],
-  RB: ['rushing_yards', 'receiving_yards'],
-  WR: ['receiving_yards'],
-  TE: ['receiving_yards'],
-}};
-const LADDER_MULTIPLIER = 2; // "double or something" -- Claude's own pick, easy to retune
-const MIN_LADDER_LINE = 30; // yards -- per Trevor, added 2026-09-24 so a thin line (e.g. a 0.5 QB Rush Yds line) can't trivially produce a huge ratio
-
-function ladderInfo(r) {{
-  const allowed = LADDER_STATS[r.position];
-  if (!allowed || !allowed.includes(r.stat_col)) return null;
-  if (r.vegas_line === null || r.vegas_line === undefined || r.vegas_line < MIN_LADDER_LINE) return null;
-  if (!r.game_log || !r.game_log.length) return null;
-  let bestIdx = -1, bestVal = -Infinity;
-  for (let i = 0; i < r.game_log.length; i++) {{
-    if (r.game_log[i] > bestVal) {{ bestVal = r.game_log[i]; bestIdx = i; }}
-  }}
-  if (bestVal <= 0) return null; // a negative/zero "best game" (e.g. an all-sack Rush Yds season so far) isn't a ceiling
-  const ratio = bestVal / r.vegas_line;
-  if (ratio < LADDER_MULTIPLIER) return null;
-  return {{
-    value: bestVal,
-    ratio,
-    week: r.game_weeks ? r.game_weeks[bestIdx] : null,
-    opponent: r.game_opponents ? r.game_opponents[bestIdx] : null,
-  }};
-}}
-
 // Alt-line idea (2026-10-30, per Trevor: "if a projection is over and like
 // way over the line, you could suggest an alternate line"). No alt-line
 // odds are pulled (they'd cost extra Odds API credits), so this only
@@ -2817,14 +2759,191 @@ function altLineTag(r) {{
   return ` <span class="cov-tag" title="${{escapeHtml(title)}}">${{a.side === 'over' ? '&#11014;' : '&#11015;'}} Alt ${{a.side === 'over' ? 'O' : 'U'}} ${{a.line}}</span>`;
 }}
 
+// 🪜 Ladder board (2026-11-09, per Trevor: "it should basically be a
+// projection for who's gonna go off that game"). Replaces the old 🪜 badge
+// (season high >= 2x the line). Trevor's ladders are rungs every 10 yards
+// (40+, 50+, 60+ ...), more money on the low rungs, and "going off" means
+// climbing several rungs past the line (75.5 -> ~120, 30.5 -> ~80).
+//
+// One logistic model prices every rung: chance he reaches T, from the
+// distance of T above his line plus what predicted big games in a
+// 2019-2025 backtest (scripts/backtest_ladder*.py; on unseen 2024-25 games
+// the weekly top 10 went off 32% of the time vs 12% for everyone):
+//   form   recent form (0.6 last 4 + 0.4 season) over the line
+//   defr   what this defense allows his position in this stat vs league
+//   usage  last-2-game volume (targets / carries / attempts) vs his season
+//   best   season high over the line;  boom  share of games already "gone off"
+//   vac    teammates listed Out/Doubtful: their share of team volume
+// Tested and left out: game total / spread (no effect for one player) and
+// man/zone fit (no effect, and 2026 coverage charting isn't published).
+// Season-to-date numbers, not the Weeks filter (that's what was tested).
+// Rungs 4+ steps up are shaded down (the model ran ~30% hot there).
+// No alt odds are pulled: the fair price per rung is to compare at the book.
+const LADDER_COEF = {{"dist": -2.8101, "dist2": 0.4437, "dist3": -0.3558, "dist_form": 0.6211, "form": 0.808, "defr": 0.8345, "usage": 0.2187, "best": 0.5113, "boom": 0.51, "vac": 0.8353, "dist_vac": 1.001, "dist_cv": 0.0409, "dist_boom": -0.3085, "is_receiving_yards": -0.8183, "dist_receiving_yards": -0.5604, "is_rushing_yards": -0.7573, "dist_rushing_yards": -0.6534, "is_passing_yards": -0.8533, "dist_passing_yards": -0.2415, "is_receptions": -0.6478, "dist_receptions": -1.3548}};
+const LADDER_SETS = {{
+  receiving_yards: {{ step: 10, c: 10, vol: 'targets', min: 15 }},
+  rushing_yards: {{ step: 10, c: 10, vol: 'carries', min: 15 }},
+  passing_yards: {{ step: 25, c: 25, vol: 'attempts', min: 15 }},
+  receptions: {{ step: 1, c: 1, vol: 'targets', min: 1.5 }},
+}};
+const LADDER_BOARD_SIZE = 15;
+// Backtest go-off rates by prop: the board ranks by chance / this, so pass
+// yards (which go off most often) don't fill every spot.
+const LADDER_BASE = {{ passing_yards: 0.181, receiving_yards: 0.109, receptions: 0.101, rushing_yards: 0.121 }};
+function ladderGap(stat, line) {{
+  if (stat === 'passing_yards') return Math.max(75, 0.3 * line);
+  if (stat === 'receptions') return Math.max(3, 0.6 * line);
+  return Math.max(40, 0.6 * line);
+}}
+const ladderShade = k => (k <= 3 ? 1 : k === 4 ? 0.95 : k === 5 ? 0.82 : 0.7);
+function ladderSeasonVals(r) {{
+  return playerSelectedIndices(r, seasonWeeks()).map(i => r.game_log[i]);
+}}
+const _ladderMean = a => a.reduce((x, y) => x + y, 0) / a.length;
+function ladderVolRow(r, vol) {{
+  return ROWS.find(x => x.player === r.player && x.team === r.team && x.stat_col === vol) || null;
+}}
+let _ladderVacCache = {{}};
+function ladderVacated(team, vol) {{
+  const key = team + '|' + vol;
+  if (_ladderVacCache[key]) return _ladderVacCache[key];
+  const out = (INJ_BY_TEAM[team] || []).filter(p => (p.severity || 0) >= 3).map(p => p.name);
+  let teamPg = 0, gone = 0;
+  const names = [];
+  for (const x of ROWS) {{
+    if (x.team !== team || x.stat_col !== vol) continue;
+    const v = ladderSeasonVals(x);
+    if (!v.length) continue;
+    const avg = _ladderMean(v);
+    teamPg += avg;
+    if (out.includes(x.player) && avg >= (vol === 'carries' ? 2 : 3)) {{ gone += avg; names.push(x.player); }}
+  }}
+  return (_ladderVacCache[key] = {{ share: teamPg ? gone / teamPg : 0, names }});
+}}
+function ladderDefRatio(r) {{
+  const key = r.position + '|' + r.stat_col;
+  const {{ avgs }} = seasonDefRanks(key);
+  const vals = Object.values(avgs).filter(v => v !== null && v !== undefined);
+  const a = avgs[r.opponent];
+  if (!vals.length || a === null || a === undefined) return 1;
+  const lg = _ladderMean(vals);
+  const n = ((DEFENSE_GAMES[r.opponent] && DEFENSE_GAMES[r.opponent][r.position]) || []).filter(g => g && g.season === SEASON && g.week < WEEK).length;
+  return lg > 0 ? (n * (a / lg) + 3) / (n + 3) : 1;
+}}
+function ladderLogit(stat, f, t) {{
+  const C = LADDER_COEF, set = LADDER_SETS[stat];
+  const dist = Math.log((t + set.c) / (f.line + set.c));
+  return C['is_' + stat] + dist * (C.dist + C['dist_' + stat]) + C.dist2 * dist * dist + C.dist3 * dist * dist * dist
+    + C.form * f.form + C.dist_form * dist * f.form + C.defr * f.defr + C.usage * f.usage + C.best * f.best
+    + C.boom * f.boom + C.dist_boom * dist * f.boom + C.vac * f.vac + C.dist_vac * dist * f.vac + C.dist_cv * dist * f.cv;
+}}
+function ladderInfo(r) {{
+  const set = LADDER_SETS[r.stat_col];
+  if (!set || !r.game_log) return null;
+  if (r.injury && /Out|Doubtful|IR/i.test(r.injury.status || '')) return null;
+  const m = bestMarketFor(r, 'over');
+  const line = m ? m.line : r.vegas_line;
+  if (line === null || line === undefined) return null;
+  const vals = ladderSeasonVals(r);
+  if (vals.length < 3) return null;
+  const savg = _ladderMean(vals);
+  if (savg < set.min || line < 0.3 * savg) return null; // a line far under his average is bad data
+  const last4 = _ladderMean(vals.slice(0, 4)); // game_log is most-recent-first
+  const formAvg = 0.6 * last4 + 0.4 * savg;
+  const L = Math.max(line, 0.5);
+  const gap = ladderGap(r.stat_col, L);
+  const sd = Math.sqrt(vals.reduce((s, v) => s + (v - savg) * (v - savg), 0) / Math.max(1, vals.length - 1));
+  const volRow = r.stat_col === 'passing_yards' ? ladderVolRow(r, 'attempts') : ladderVolRow(r, set.vol);
+  const vv = volRow ? ladderSeasonVals(volRow) : [];
+  const usage = vv.length >= 3 && _ladderMean(vv) > 0 ? _ladderMean(vv.slice(0, 2)) / _ladderMean(vv) : 1;
+  const vac = r.stat_col === 'passing_yards' ? {{ share: 0, names: [] }} : ladderVacated(r.team, set.vol);
+  const defr = ladderDefRatio(r);
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const f = {{
+    line: L,
+    form: Math.log(clamp(formAvg / L, 0.2, 5)), defr: Math.log(clamp(defr, 0.5, 2)), usage: Math.log(clamp(usage, 0.3, 3)),
+    best: Math.log(clamp(Math.max(...vals) / L, 0.5, 20)), boom: vals.filter(v => v >= L + gap).length / vals.length,
+    vac: clamp(vac.share, 0, 0.6), cv: clamp(savg ? sd / savg : 0, 0, 2),
+  }};
+  const prob = t => {{
+    const k = Math.round((t - L) / set.step);
+    return ladderShade(k) / (1 + Math.exp(-ladderLogit(r.stat_col, f, t)));
+  }};
+  const first = r.stat_col === 'receptions' ? Math.floor(L) + 1 : Math.ceil((L + 0.01) / set.step) * set.step;
+  const rungs = [];
+  for (let t = first; rungs.length < 8; t += set.step) {{
+    const p = prob(t);
+    if (p < 0.04 && rungs.length >= 3) break;
+    rungs.push({{ t, p, fair: p >= 0.5 ? -Math.round(100 * p / (1 - p)) : Math.round(100 * (1 - p) / p) }});
+  }}
+  const target = r.stat_col === 'receptions' ? Math.ceil(L + gap) : Math.ceil((L + gap) / set.step) * set.step;
+  const why = [];
+  const r1 = v => Math.round(v * 10) / 10;
+  if (formAvg / L >= 1.15) why.push(`running hot: averaging ${{r1(formAvg)}} lately vs a ${{line}} line`);
+  if (defr >= 1.1) why.push(`${{r.opponent}} allows ${{Math.round((defr - 1) * 100)}}% more ${{r.stat_label}} to ${{r.position}}s than average`);
+  if (usage >= 1.15) why.push(`usage up: last 2 games ${{r1(_ladderMean(vv.slice(0, 2)))}} ${{volRow ? volRow.stat_label.toLowerCase() : ''}} vs ${{r1(_ladderMean(vv))}} for the season`);
+  if (vac.share >= 0.1) why.push(`${{vac.names.join(', ')}} out (${{Math.round(vac.share * 100)}}% of the team's ${{set.vol}})`);
+  if (f.boom > 0) why.push(`already went off in ${{vals.filter(v => v >= L + gap).length}} of ${{vals.length}} games`);
+  if (Math.max(...vals) / L >= 2) why.push(`season high ${{Math.max(...vals)}}`);
+  if (defr <= 0.9) why.push(`caution: ${{r.opponent}} allows ${{Math.round((1 - defr) * 100)}}% less than average`);
+  const goff = prob(target);
+  return {{ line, book: m ? m.book : null, price: m ? m.price : null, goff, lift: goff / LADDER_BASE[r.stat_col], target, rungs, why }};
+}}
+// The week's board: best row per player, top LADDER_BOARD_SIZE by go-off chance.
+let _ladderBoard = null;
+function ladderBoard() {{
+  if (_ladderBoard) return _ladderBoard;
+  const best = {{}};
+  for (const r of ROWS) {{
+    const info = ladderInfo(r);
+    if (!info) continue;
+    const k = r.player + '|' + r.team;
+    if (!best[k] || info.lift > best[k].info.lift) best[k] = {{ r, info }};
+  }}
+  _ladderBoard = Object.values(best).sort((a, b) => b.info.lift - a.info.lift).slice(0, LADDER_BOARD_SIZE);
+  return _ladderBoard;
+}}
+function ladderPick(r) {{
+  return ladderBoard().find(x => x.r.player === r.player && x.r.team === r.team && x.r.stat_col === r.stat_col) || null;
+}}
+const fmtFair = v => (v > 0 ? '+' + v : String(v));
 function ladderTag(r) {{
-  const info = ladderInfo(r);
-  if (!info) return '';
-  const ratioStr = (Math.round(info.ratio * 10) / 10) + 'x';
-  const whenStr = info.week ? `Wk${{info.week}}${{info.opponent ? ' vs ' + info.opponent : ''}}` : 'earlier this season';
-  const title = `${{r.stat_label}}: posted ${{info.value}} in ${{whenStr}} -- ${{ratioStr}} the current line (${{r.vegas_line}}). A proven ceiling well above what's being asked right now (fixed ${{LADDER_MULTIPLIER}}x bar).`;
+  const x = ladderPick(r);
+  if (!x) return '';
+  const i = x.info;
+  const title = `🪜 Ladder board #${{ladderBoard().indexOf(x) + 1}}: ${{Math.round(i.goff * 100)}}% to reach ${{i.target}}+ (line ${{i.line}}).\\n`
+    + i.rungs.map(g => `${{g.t}}+  ${{Math.round(g.p * 100)}}%  (fair ${{fmtFair(g.fair)}})`).join('\\n') + (i.why.length ? '\\n\\n' + i.why.join('\\n') : '');
   return ` <span class="cov-tag ladder-tag" title="${{escapeHtml(title)}}">&#129692;</span>`;
 }}
+function ladderBoardHtml() {{
+  const list = ladderBoard();
+  if (!list.length) return '<p class="muted">No ladder candidates yet -- they need posted lines (most props go up Thursday-Sunday).</p>';
+  let html = `<div class="modal-note">Who's most likely to go off this week: climb several rungs past his line (yards: line + 40 or 60%, whichever is more; catches: +3 or 60%; pass yards: +75 or 30%). Each rung shows the board's chance and a <b>fair price</b> -- if the book's alt line pays more than the fair price, that rung is value. Built from recent form, the matchup, rising usage, teammates out and his boom history; tested on 2019-2025, where a weekly top 10 went off 32% of the time vs 12% for everyone. Alt odds aren't pulled, so check them at the book. Context only -- not alerted.</div>`;
+  html += '<div class="modal-table-wrap"><table class="modal-table"><thead><tr><th>#</th><th>Player</th><th>Prop</th><th>Line</th><th>Go-off</th><th>Rungs: chance (fair price)</th><th>Why</th></tr></thead><tbody>';
+  list.forEach((x, n) => {{
+    const r = x.r, i = x.info;
+    const rungs = i.rungs.map(g => `<span class="ladder-rung" title="${{g.t}}+ : ${{Math.round(g.p * 1000) / 10}}% -- fair price ${{fmtFair(g.fair)}}"><b>${{g.t}}+</b> ${{Math.round(g.p * 100)}}% <span class="muted">(${{fmtFair(g.fair)}})</span></span>`).join(' ');
+    html += `<tr><td>${{n + 1}}</td><td><a href="#" class="ladder-player" data-player="${{escapeHtml(r.player)}}">${{escapeHtml(r.player)}}</a> <span class="muted">${{r.position}} ${{r.team}} ${{r.at_opponent ? '@' : 'vs'}} ${{r.opponent}}</span></td>`
+      + `<td>${{escapeHtml(r.stat_label)}}</td><td>${{i.line}}${{i.book ? ` <span class="muted">${{i.book}}</span>` : ''}}</td>`
+      + `<td title="${{Math.round(i.lift * 10) / 10}}x the usual go-off rate for ${{escapeHtml(r.stat_label)}}"><b>${{Math.round(i.goff * 100)}}%</b> <span class="muted">to ${{i.target}}+ &middot; ${{Math.round(i.lift * 10) / 10}}x</span></td><td style="white-space:normal;">${{rungs}}</td>`
+      + `<td style="white-space:normal; font-size:12px;">${{escapeHtml(i.why.join('; '))}}</td></tr>`;
+  }});
+  return html + '</tbody></table></div>';
+}}
+function openLadderModal() {{
+  closePlayerModal();
+  document.querySelector('#playerModalOverlay .modal-panel').style.maxWidth = '1180px';
+  document.getElementById('modalPlayerName').textContent = '🪜 Ladder board';
+  document.getElementById('modalMeta').textContent = `Week ${{WEEK}} · the ${{LADDER_BOARD_SIZE}} likeliest to go off · season-to-date numbers`;
+  document.getElementById('modalBody').innerHTML = ladderBoardHtml();
+  document.getElementById('playerModalOverlay').style.display = 'flex';
+}}
+document.addEventListener('click', e => {{
+  if (e.target.closest('#ladderBoardBtn')) {{ openLadderModal(); return; }}
+  const a = e.target.closest('.ladder-player');
+  if (a) {{ e.preventDefault(); closePlayerModal(); openPlayerModal(a.dataset.player); }}
+}});
+
 
 // "Weak matchup" filter (added 2026-09-24 per Trevor, as a companion to
 // the ladder badge above): "add a filter so if the defense the player is
@@ -4084,7 +4203,7 @@ function render() {{
       (!hideMarkedX || MARKS[markKey(r)] !== 'pass') &&
       (!hideReview || !r.needs_review || r.idea_reason || altOnly) && // Hide ❓ keeps 💡 (and alt-line rows when that filter is on)
       (!altOnly || r.alt_line) &&
-      (!ladderOnly || ladderInfo(r) !== null) &&
+      (!ladderOnly || ladderPick(r) !== null) &&
       (!weakMatchupOnly || isWeakMatchup(r)) &&
       (!strongMatchupOnly || isStrongMatchup(r)) &&
       (!q || r.player.toLowerCase().includes(q) || r.team.toLowerCase().includes(q) || r.opponent.toLowerCase().includes(q))
@@ -5515,6 +5634,7 @@ function myRulesHtml() {{
       '<b>Win % / Need / Edge:</b> an estimated chance to win the better side: starts from the books\u2019 odds with the juice removed, moves part of the way toward a projection model (Poisson for catches/TDs, normal for attempts/carries, a skewed curve for yards) and his season hit rate at that line -- how much each counts per stat was tuned on 66,000 games from 2019-2025 (e.g. QB passing leans on the projection, receiving on the hit rate). In that test, its 57% calls won 57% and its 64% calls won 66%. Need = the break-even % of the best price; Edge = the difference: green +' + WIN_EDGE_GOOD * 100 + ' to +' + WIN_EDGE_CHECK * 100 + ' (if you like it, go), amber \u26a0 over +' + WIN_EDGE_CHECK * 100 + ' (check news first), gray 0 to +' + WIN_EDGE_GOOD * 100 + ', red negative. Context only -- it doesn\u2019t change picks or alerts, and it isn\u2019t proven yet.',
       '<b>📅 Full year agrees:</b> shown next to the signal when the same side and line also holds over the whole season -- he and this defense both ' + Math.round(CONS_TIERS[1] * 100) + '%+ (after excused misses). A flag only; grades still follow the selected weeks.',
       '<b>🎯 Outlier defense:</b> one of the ' + OUTLIER_DEF_TOP + ' defenses allowing the most (or least) for the whole season, for RB Rush Yds and WR/TE Receptions only (where it held up in 2019-2025 tests). Shown as 🎯 O / 🎯 U next to the player name; turns a ❓ on that side into 💡, never a 3-star. If the line also looks off for that matchup (Anticipated ' + Math.round((OUTLIER_VALUE_RATIO - 1) * 100) + '%+ past it), the row becomes a 3-star on the 🎯 side (since Nov 3, after going 22-10 in the Week 7-8 look-back) -- unless it has a role change, blowout or matchup flag, or the price is worse than ' + MAX_JUICE_PRICE + ' (then it stays 💡). Never a MUST BET.',
+      '<b>🪜 Ladder board:</b> the ' + LADDER_BOARD_SIZE + ' players likeliest to go off this week (climb several rungs past the line: yards line + 40 or 60%, catches +3 or 60%, pass yards +75 or 30%), from recent form vs the line, how much this defense allows his position, rising usage, teammates out and his boom history. Each rung gets a chance and a fair price to compare with the book\u2019s alt odds. Tested on 2019-2025: a weekly top 10 went off 32% of the time vs 12% overall. Game script and man/zone fit were tested and didn\u2019t help, so they\u2019re left out. Context only -- never alerted.',
       '<b>⬆ Alt line idea (Overs only -- books don\u2019t offer alt Unders):</b> when Anticipated is ' + Math.round((ALT_PROJ_RATIO - 1) * 100) + '%+ past the line, the furthest alt line (steps of 5 yards or 1 catch/carry) short of the projection that he cleared in ' + Math.round(ALT_HIT_RATE * 100) + '%+ of the selected games. A number to look up -- alt odds aren\u2019t pulled, so check the price. The \u2b06 Alt lines only box shows just these.',
       '<b>&#10067;</b> -- everything else worth a glance. Hover any ❓ for exactly why it isn’t a pick.',
     ])

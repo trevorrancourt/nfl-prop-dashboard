@@ -3425,3 +3425,39 @@ Trevor: "Lines aren't pulling improperly. Nate B from Jacksonville has a line an
 - `odds_for_player()` falls back to first initial + last name when exactly one odds name fits (ambiguous ones like two "J. Allen"s don't match).
 - A player with a posted line skips `RELEVANCE_FILTER` (low-usage players with lines were dropped before).
 - An "Odds names" notice on every Actions build reports matched/total and lists unmatched odds names, so the next mismatch shows up without guessing.
+
+## 🪜 Ladder board (2026-11-09)
+
+Trevor: "revise the ladder logic ... a projection for who's gonna go off that game based on scheme, performance and projected line vs vegas line". His answers:
+- **What he bets:** rungs "40+, 50+, 60+, 70+".
+- **What going off means:** "several rungs over the projected line ... line of like 75 yards, they'd need to get to 120ish. if it's 30 yards, need to get to like 80".
+- **Stats:** rec / rush / pass yards and receptions.
+- **Staking:** more stake on the low rungs.
+- **Signals he wanted:** all four (weak defense, game script, man/zone, usage).
+- **Display:** a separate Ladder board list.
+- **Process:** test before shipping.
+
+Backtest (scripts/backtest_ladder*.py, nflverse 2019-2025, weeks 5-18; line = prior median ±0.5; go-off = line + gap). 38,520 player-games, 11.3% went off. Quintile lifts:
+- Boom history: 7.8% → 18.1%.
+- Form vs line: 6.2% → 15.9%.
+- Usage (last 2): 9.0% → 14.3%.
+- Best game vs line: 8.1% → 13.8%.
+- Defense ratio: 8.9% → 12.6%.
+- Game total and spread: flat (~11%).
+- Coverage (part 3): nflverse participation 2023-25 man/zone charting, the receiver's prior-season man-vs-zone yards/target lean × the defense's man rate. Flat (12.0% bad fit vs 11.0% good fit); the charting man rate also swings 41% / 48% / 31% by year. Left out.
+- Vacated teammate volume (part 4): none 9.6%, 20%+ 14.2% (rushing 17.3%). Added.
+
+Model (part 2): one logistic over every rung k=0..6, fit 2019-23, tested 2024-25.
+- Log loss 0.4134 vs 0.4260 base.
+- Top 10% per prop: pass 40% vs 19%, rec yds 21% vs 10%, receptions 22% vs 9%, rush 24% vs 10%.
+- Weekly top 10: 32.1% went off vs 11.6% base.
+- Top rungs ran hot (k6 said 5.3%, actual 3.6%), so the page shades k≥4.
+- Production coefficients were refit on all of 2019-2025.
+
+Built:
+- The "🪜 Ladder board" button and modal.
+- The 🪜 tag on board rows, and "Ladder only" now shows the board.
+- Ranking by chance ÷ per-prop base rate. Before that, QBs filled all 15 spots, because pass yards go off 18% of the time.
+- Fair prices per rung, and a My rules entry.
+- With median test lines the board mixed WR/RB/QB, e.g. KC Concepcion rec yds 37.5: 18% to reach 80+.
+- Not graded on real lines yet; the look-back can be extended to grade the board.
