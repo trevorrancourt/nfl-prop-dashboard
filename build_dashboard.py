@@ -2174,20 +2174,46 @@ const PASS_REASONS = [
   ['gut', '🤷 Gut -- just don\u2019t like it'],
   ['other', '✏️ Other'],
 ];
-function openPassReason(key) {{
+// Why you like a bet (2026-11-09, per Trevor: "review my rationale at the
+// end of the week and see if it worked"). Saved as MARKS['like|' + key].
+const BET_REASONS = [
+  ['matchup', '🛡️ Matchup'],
+  ['volume', '📊 Usage / volume'],
+  ['line_off', '📉 Line looks off'],
+  ['script', '🎬 Game script'],
+  ['news', '🩹 Injury / news'],
+  ['board', '⭐ The board\u2019s signal'],
+  ['gut', '🤷 Gut'],
+  ['other', '✏️ Other'],
+];
+// The line the board showed when you passed, on the side it pointed to, so
+// the weekly review can say whether passing was right. MARKS['pline|' + key]
+// = "side|line|price".
+function snapshotPassLine(key) {{
+  const live = ROWS.find(r => markKey(r) === key);
+  if (!live) return;
+  const e = enrichRow(live, selectedWeeks, {{}});
+  const side = e.show_side || (e.cons ? e.cons.side : null);
+  const m = side ? bestMarketFor(e, side) : null;
+  if (m) {{ MARKS['pline|' + key] = `${{side}}|${{m.line}}|${{m.price}}`; saveMarks(); }}
+}}
+function openReasonPicker(key, kind) {{
   closePlayerModal();
   const m = parseBetKey(key);
-  document.getElementById('modalPlayerName').textContent = 'Why pass?';
-  document.getElementById('modalMeta').textContent = `${{m.player}} · ${{statLabelFor(m.stat_col)}} -- one tap, so later look-backs can check whether your passes were right`;
+  const list = kind === 'bet' ? BET_REASONS : PASS_REASONS;
+  document.getElementById('modalPlayerName').textContent = kind === 'bet' ? 'Why do you like it?' : 'Why pass?';
+  document.getElementById('modalMeta').textContent = `${{m.player}} · ${{statLabelFor(m.stat_col)}} -- one tap; the weekly review grades your reasons`;
   document.getElementById('modalBody').innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:8px;">'
-    + PASS_REASONS.map(([v, label]) => `<button type="button" class="pos-btn pass-reason" data-key="${{escapeHtml(key)}}" data-reason="${{v}}">${{label}}</button>`).join('')
-    + `<button type="button" class="pos-btn pass-reason" data-key="${{escapeHtml(key)}}" data-reason="">Skip</button></div>`;
+    + list.map(([v, label]) => `<button type="button" class="pos-btn reason-btn" data-kind="${{kind}}" data-key="${{escapeHtml(key)}}" data-reason="${{v}}">${{label}}</button>`).join('')
+    + `<button type="button" class="pos-btn reason-btn" data-kind="${{kind}}" data-key="${{escapeHtml(key)}}" data-reason="">Skip</button></div>`;
   document.getElementById('playerModalOverlay').style.display = 'flex';
 }}
+function openPassReason(key) {{ openReasonPicker(key, 'pass'); }}
 document.addEventListener('click', e => {{
-  const b = e.target.closest('.pass-reason');
+  const b = e.target.closest('.reason-btn');
   if (!b) return;
-  if (b.dataset.reason) MARKS['why|' + b.dataset.key] = b.dataset.reason; else delete MARKS['why|' + b.dataset.key];
+  const pre = b.dataset.kind === 'bet' ? 'like|' : 'why|';
+  if (b.dataset.reason) MARKS[pre + b.dataset.key] = b.dataset.reason; else delete MARKS[pre + b.dataset.key];
   saveMarks();
   closePlayerModal();
   render();
@@ -4816,8 +4842,12 @@ function onMarkChange(e) {{
   saveMarks();
   if (sel.value === 'bet') {{ ensureBetMeta(key); snapshotMarket(key); saveBets(); }}
   if (sel.value === 'parlay') {{ ensureBetMeta(key); saveBets(); }}
-  if (sel.value === 'pass') {{ openPassReason(key); return; }}
-  if (sel.value !== 'pass' && MARKS['why|' + key]) {{ delete MARKS['why|' + key]; saveMarks(); }}
+  // Reasons + the pass line, for the weekly "review my week" (2026-11-09).
+  for (const [pre, keep] of [['why|', 'pass'], ['pline|', 'pass'], ['like|', 'bet']]) {{
+    if (sel.value !== keep && MARKS[pre + key]) {{ delete MARKS[pre + key]; saveMarks(); }}
+  }}
+  if (sel.value === 'pass') {{ snapshotPassLine(key); openPassReason(key); return; }}
+  if (sel.value === 'bet') {{ openReasonPicker(key, 'bet'); return; }}
   render();
 }}
 document.getElementById('tbody').addEventListener('change', onMarkChange);
