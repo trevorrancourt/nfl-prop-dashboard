@@ -935,6 +935,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .cov-medium {{ background: rgba(154,161,172,0.18); color:#c3c8d1; }}
   .cov-lowman {{ background: rgba(210,153,34,0.18); color:#e0b84a; }}
   .cov-review {{ background: rgba(191,133,255,0.18); color:#c893ff; margin-left:0; }}
+  .pick-side {{ font-size:13px; margin-right:6px; }}
   .mustbet-tag {{ background: rgba(255,215,0,0.20); color:#ffd54a; margin-left:0; font-size:11px; letter-spacing:0.02em; }}
   .injury-tag {{ margin-left:5px; cursor: default; }}
   .injury-out {{ background: rgba(248,81,73,0.18); color:#ff8f89; }}
@@ -6020,9 +6021,10 @@ function pickTag(r) {{
     e.must_why ? e.must_why.join('\\n') : null,
     `Why it's here: ${{PICK_GROUPS[c.g]}} -- that kind of pick went ${{c.rec.w}}-${{c.rec.l}} in our graded weeks.`,
   ].filter(Boolean);
-  // 🔼 Over / 🔽 Under right on the tag so the side reads at a glance (2026-11-10, per Trevor).
-  const sideChip = b.side === 'over' ? '&#128316; Over' : '&#128317; Under';
-  return `<span class="cov-tag ${{alert ? 'mustbet-tag' : 'cov-review'}}" style="margin-right:4px; white-space:nowrap;" title="${{escapeHtml(lines.join('\\n'))}}">&#128269; Review #${{n}} &middot; ${{sideChip}}</span>`;
+  // The side at a glance, plain ▲ (Over) / ▼ (Under) after the tag -- no
+  // highlight, no emoji, no word (2026-11-10, per Trevor).
+  const sideMark = `<b class="pick-side" title="${{b.side === 'over' ? 'Over' : 'Under'}}">${{b.side === 'over' ? '&#9650;' : '&#9660;'}}</b>`;
+  return `<span style="white-space:nowrap;"><span class="cov-tag ${{alert ? 'mustbet-tag' : 'cov-review'}}" style="margin-right:4px;" title="${{escapeHtml(lines.join('\\n'))}}">&#128269; Review #${{n}}</span>${{sideMark}}</span>`;
 }}
 // Extra flags on a Review pick (2026-11-10, per Trevor: "use the emojis
 // we've discussed for like extra flags like calendar and target"), judged on
