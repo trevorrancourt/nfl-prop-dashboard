@@ -67,6 +67,11 @@ It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of
 - After any change: build, then load the page headlessly and check for `pageerror`. One syntax error blanks the whole page.
 
 ## Signal logic: Trevor's rules, don't loosen without asking
+- **The board shows only 🔍 Review (2026-11-10, per Trevor: "i think we just focus on the review funciton for now. use the emojis we've discussed for like extra flags like calendar and target").** The signal column is now "🔍 Review": `pickTag` + `pickFlags` only.
+  - The 🔥/🧊/⭐/💡/❓ tiers below still run in `enrichRow` (MUST BETs and 🎯 3-stars feed the list, and the look-back/study grade them), but `signalEmoji()` is no longer shown anywhere.
+  - `pickFlags` judges its flags on the Review bet's own side and line: 📅 full year agrees (computed with `consistencyStats(..., bet.side)`) and ✔/⚠ script (flipped when the tiebreak lean is the other side).
+  - 🎯, ⬆ Alt, 🪜 and 🩹 stay next to the player name. A Review row's book cells show the bet's side, line and best book (`render()` overrides `show_side`).
+  - "Hide ❓ rows" became "🔍 Review picks only" (`reviewOnlyFilter`; Alt lines only overrides it). The game-script popup lists that game's Review picks (`gsBoardRows`), and the Second look header shows the tag.
 - **📜 My rules** (button next to My Bets, `myRulesHtml()`) lists every rule below in plain English, using the live constants. **Whenever a rule is added or changed, update `myRulesHtml()` too.**
 - **Default signal mode is "Consistency (hit rates)".** "Average edge" is the old formula, still selectable.
   - The choice is saved in localStorage `nfl_prop_dashboard_signal_mode`.
@@ -122,7 +127,7 @@ It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of
 - Marks: `nfl_prop_dashboard_marks_v1`. Picking ❌ Pass opens a one-tap "Why pass?" picker (`PASS_REASONS`: injury, line moved, matchup, script, volume, exposure, gut, other; 2026-11-09, per Trevor: "would it help if there was a place where when i chose to pass, why i did?"). It's saved as `MARKS['why|' + key]`, along with the line the board showed (`MARKS['pline|' + key]` = side|line|price, from `snapshotPassLine`). Picking ✅ Bet opens "Why do you like it?" (`BET_REASONS` → `MARKS['like|' + key]`). Weekly rationale review (2026-11-09, per Trevor: "review my rationale at the end of the week and see if it worked"): Trevor pastes his My Bets backup, and Claude runs `python3 scripts/review_my_week.py <backup.json> --weeks N` locally. It reports bets by reason, passes by reason (would the board's side have won?), and by stat, side and stake. Don't commit his backup or dollar figures.
 - Bets: `nfl_prop_dashboard_bets_v1` (key = `WEEK|player|team|stat_col`)
 - Columns: `nfl_prop_dashboard_cols_v1`
-- Filter checkboxes (Hide ❓, Ladder, Alt lines, Weak/Strong matchup): `nfl_prop_dashboard_filters_v1`. Hide ❌ rows always loads ticked (per Trevor).
+- Filter checkboxes (🔍 Review picks only, Ladder, Alt lines, Weak/Strong matchup): `nfl_prop_dashboard_filters_v1`. Hide ❌ rows always loads ticked (per Trevor).
 - My Bets has Backup/Restore (JSON).
 - 🔗 Parlay mark (`MARKS[key]='parlay'`) isn't a single bet; My Bets' "Build a parlay" box turns ticked 🔗 legs + odds into one manual bet with `legs` (looks W/L from the legs).
 - **Login so bets sync across devices: live 2026-10-16** (Supabase project `ugyxzhdcmzqhibajtbwa`; URL + anon key at the top of `build_dashboard.py`). Look for "Sign-in + cross-device sync" in the template. The merge is three-way against the last synced copy (`nfl_prop_dashboard_sync_base_v1|<user id>`), and writes are conditional on `updated_at` so two devices can't overwrite each other. Not available on the Mac's file:// copy. The plan Trevor agreed to:

@@ -3615,3 +3615,14 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
   - It also showed a same-game mix-up: A.J. Brown (NE) <- Amon-Ra St. Brown (DET), both "A. Brown" in NE @ DET.
   - Fix: the fallback skips any odds name that exactly matches another player on the board (`BOARD_NAMES`).
 
+## Board shows only 🔍 Review (2026-11-10)
+- Trevor: "i still dont get why we're showing reviews, emojis, multi cubes, etc." Then: "i think we just focus on the review funciton for now. use the emojis we've discussed for like extra flags like calendar and target".
+- The signal column is now "🔍 Review": the Review #n tag plus flags judged on the Review bet's own side.
+  - 📅 means the full year agrees.
+  - ✔/⚠ script means the game script backs the bet or argues against it.
+- 🔥/🧊/⭐/💡/❓ are no longer shown. They still compute underneath: MUST BET feeds Review, and the look-back grades them.
+- "Hide ❓ rows" was replaced by "🔍 Review picks only".
+- Review rows' book cells show the bet's side.
+- The game-script popup lists the game's Review picks.
+- My rules has a new "The board" section at the top.
+
