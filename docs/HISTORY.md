@@ -3611,5 +3611,7 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
   - `fetch_odds.py` now records `player_games` (each odds name's game).
   - `odds_for_player()` only uses lines from an odds name whose game includes the player's team. This applies to exact names too.
   - With no game info (an older odds file), exact names match but the fallback is off.
-  - The "Odds names" notice lists every first-initial match and every refusal.
+  - The "Odds names" notice lists every first-initial match and every refusal.- **Same-day follow-up:** the first real build after the fix showed the refusals (Javonte Williams, and Ty Johnson BUF, who would have taken Theo Johnson's lines).
+  - It also showed a same-game mix-up: A.J. Brown (NE) <- Amon-Ra St. Brown (DET), both "A. Brown" in NE @ DET.
+  - Fix: the fallback skips any odds name that exactly matches another player on the board (`BOARD_NAMES`).
 

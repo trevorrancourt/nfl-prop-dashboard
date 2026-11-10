@@ -459,7 +459,11 @@ def format_weather(entry):
 # game (ODDS_GAMES, from fetch_odds' player_games) includes the player's
 # team. With no game info (an older odds file), exact names still match but
 # the first-initial fallback is off. ODDS_FALLBACK_LOG feeds the build notice.
+# Also (same day, A.J. Brown was taking Amon-Ra St. Brown's lines in the same
+# game): the fallback never uses an odds name that exactly matches another
+# player on the board (BOARD_NAMES) -- those lines are his.
 MATCHED_ODDS = set()
+BOARD_NAMES = set()
 _ODDS_FALLBACK = {}
 ODDS_GAMES = {}
 ODDS_FALLBACK_LOG = []
@@ -490,7 +494,7 @@ def odds_for_player(odds_lookup, norm_name, team=None, label=None):
             fk = _fallback_key(k)
             if fk:
                 _ODDS_FALLBACK.setdefault(fk, []).append(k)
-    hits = [k for k in _ODDS_FALLBACK.get(_fallback_key(norm_name), []) if k != norm_name]
+    hits = [k for k in _ODDS_FALLBACK.get(_fallback_key(norm_name), []) if k != norm_name and k not in BOARD_NAMES]
     same = [k for k in hits if _in_game(k, team)]
     if len(same) == 1:
         MATCHED_ODDS.add(same[0])
@@ -621,6 +625,7 @@ def build_rows(stats, odds_lookup, weather, injuries, injuries_by_team):
     team_totals = stats.get("team_position_totals", {})
 
     carry_shares = rb_carry_shares(stats)
+    BOARD_NAMES.update(normalize_name(inf.get("name", pid)) for pid, inf in stats["players"].items())
     # Each team's lead back = the RB with the biggest share of its RB carries
     # (for the 10+ point favorite rule, see BLOWOUT_FAV in the page script).
     lead_rb = {}
