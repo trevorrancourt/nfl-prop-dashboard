@@ -36,6 +36,13 @@ JS = r"""
   return {
     week: WEEK, oddsTime: ODDS_TIME, mode: SIGNAL_MODE,
     linesPosted: rows.filter(x => x.vegas_line !== null && x.vegas_line !== undefined).length,
+    // How full the Review list is (2026-11-10): picks shown, and how many rows
+    // were in a Review group with a price at all (before the value check).
+    reviewList: (typeof topPicks === 'function') ? (() => {
+      const tp = topPicks();
+      const inGroup = rows.filter(x => REVIEW_GROUPS.includes(pickGroup(x)) && pickBet(x) && pickBet(x).price != null).length;
+      return { shown: tp.top.length + tp.review.length, top: tp.top.length, inGroup, size: (typeof LIST_SIZE !== 'undefined' ? LIST_SIZE : null) };
+    })() : null,
     picks: pick.map(x => {
       // 🎯 3-stars (2026-11-03) aren't streak picks: use their own side/line/price.
       const op = x._bet || x.must_pick || x.outlier_promo; // Top 3 / MUST BET / 🎯 3-star: their own side/line/price

@@ -71,6 +71,8 @@ It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of
   - The 🔥/🧊/⭐/💡/❓ tiers below still run in `enrichRow` (MUST BETs and 🎯 3-stars feed the list, and the look-back/study grade them), but `signalEmoji()` is no longer shown anywhere.
   - `pickFlags` judges its flags on the Review bet's own side and line: 📅 full year agrees (computed with `consistencyStats(..., bet.side)`) and ✔/⚠ script (flipped when the tiebreak lean is the other side).
   - 🎯, ⬆ Alt, 🪜 and 🩹 stay next to the player name. A Review row's book cells show the bet's side, line and best book (`render()` overrides `show_side`).
+  - Each tag also shows the side at a glance: "🔍 Review #n · 🔼 Over" / "🔽 Under" (2026-11-10, per Trevor: "flag like a ^ and under emoji so i know quick").
+  - Each Actions build posts a "Review list" notice (from notify.py / `check_must_bets.py` `reviewList`): how many of the 20 are shown, how many rows in the Review groups had a price, and props with lines. Early in the week, with few lines posted, the list is short.
   - "Hide ❓ rows" became "🔍 Review picks only" (`reviewOnlyFilter`; Alt lines only overrides it). The game-script popup lists that game's Review picks (`gsBoardRows`), and the Second look header shows the tag.
 - **📜 My rules** (button next to My Bets, `myRulesHtml()`) lists every rule below in plain English, using the live constants. **Whenever a rule is added or changed, update `myRulesHtml()` too.**
 - **Default signal mode is "Consistency (hit rates)".** "Average edge" is the old formula, still selectable.

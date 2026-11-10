@@ -6020,7 +6020,9 @@ function pickTag(r) {{
     e.must_why ? e.must_why.join('\\n') : null,
     `Why it's here: ${{PICK_GROUPS[c.g]}} -- that kind of pick went ${{c.rec.w}}-${{c.rec.l}} in our graded weeks.`,
   ].filter(Boolean);
-  return `<span class="cov-tag ${{alert ? 'mustbet-tag' : 'cov-review'}}" style="margin-right:4px;" title="${{escapeHtml(lines.join('\\n'))}}">&#128269; Review #${{n}}</span>`;
+  // 🔼 Over / 🔽 Under right on the tag so the side reads at a glance (2026-11-10, per Trevor).
+  const sideChip = b.side === 'over' ? '&#128316; Over' : '&#128317; Under';
+  return `<span class="cov-tag ${{alert ? 'mustbet-tag' : 'cov-review'}}" style="margin-right:4px; white-space:nowrap;" title="${{escapeHtml(lines.join('\\n'))}}">&#128269; Review #${{n}} &middot; ${{sideChip}}</span>`;
 }}
 // Extra flags on a Review pick (2026-11-10, per Trevor: "use the emojis
 // we've discussed for like extra flags like calendar and target"), judged on

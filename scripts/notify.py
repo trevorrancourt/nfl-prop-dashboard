@@ -281,6 +281,11 @@ def main():
             continue
         week = week or res["week"]
         picks += res["picks"]
+        rl = res.get("reviewList")
+        if rl and os.environ.get("GITHUB_ACTIONS"):
+            print(f"::notice title=Review list ({Path(html).name})::{rl['shown']} of {rl['size']} shown "
+                  f"({rl['top']} phone-alert picks); {rl['inGroup']} rows in the Review groups had a price; "
+                  f"{res['linesPosted']} props with lines on the board")
         for w in res.get("watched", []):
             watched[w["key"]] = w
 

@@ -3624,5 +3624,7 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
 - "Hide ❓ rows" was replaced by "🔍 Review picks only".
 - Review rows' book cells show the bet's side.
 - The game-script popup lists the game's Review picks.
-- My rules has a new "The board" section at the top.
+- My rules has a new "The board" section at the top.- Same day: Trevor: "i meant 20, but i only see 10. also, can you flag like a ^ and under emoji so i know quick".
+  - The tag now reads "🔍 Review #n · 🔼 Over / 🔽 Under". ⬆ was already taken by the Alt-line tag, and ▲▼ by the injury tags.
+  - Added a "Review list" build notice (shown / in-group rows with a price / props with lines) to see why the list is short.
 
