@@ -452,8 +452,17 @@ def format_weather(entry):
 # exact normalized name misses, match on first initial + last name, but
 # only if exactly one odds name fits. MATCHED_ODDS records which odds names
 # landed on a row, so main() can list the ones that didn't.
+# Same-game check (2026-11-10, per Trevor: "javonte williams line is just
+# wrong"): the first-initial match only looked at names, so early in the week
+# (few players posted) Javonte Williams could take the line of the only other
+# "J. Williams" with one. Now a row only gets lines from an odds name whose
+# game (ODDS_GAMES, from fetch_odds' player_games) includes the player's
+# team. With no game info (an older odds file), exact names still match but
+# the first-initial fallback is off. ODDS_FALLBACK_LOG feeds the build notice.
 MATCHED_ODDS = set()
 _ODDS_FALLBACK = {}
+ODDS_GAMES = {}
+ODDS_FALLBACK_LOG = []
 
 
 def _fallback_key(norm):
@@ -461,19 +470,34 @@ def _fallback_key(norm):
     return (parts[0][:1], parts[-1]) if len(parts) >= 2 else None
 
 
-def odds_for_player(odds_lookup, norm_name):
-    if norm_name in odds_lookup:
+def _in_game(odds_norm, team):
+    """True/False: is this team in the game the odds name's lines came from?
+    None when the odds file has no game info."""
+    teams = ODDS_GAMES.get(odds_norm)
+    if teams is None:
+        return None
+    return bool(team) and to_full(team) in teams
+
+
+def odds_for_player(odds_lookup, norm_name, team=None, label=None):
+    if norm_name in odds_lookup and _in_game(norm_name, team) is not False:
         MATCHED_ODDS.add(norm_name)
         return odds_lookup[norm_name]
+    if not ODDS_GAMES:
+        return {}
     if not _ODDS_FALLBACK and odds_lookup:
         for k in odds_lookup:
             fk = _fallback_key(k)
             if fk:
                 _ODDS_FALLBACK.setdefault(fk, []).append(k)
-    hits = _ODDS_FALLBACK.get(_fallback_key(norm_name), [])
-    if len(hits) == 1:
-        MATCHED_ODDS.add(hits[0])
-        return odds_lookup[hits[0]]
+    hits = [k for k in _ODDS_FALLBACK.get(_fallback_key(norm_name), []) if k != norm_name]
+    same = [k for k in hits if _in_game(k, team)]
+    if len(same) == 1:
+        MATCHED_ODDS.add(same[0])
+        ODDS_FALLBACK_LOG.append(f"{label or norm_name} ({team}) <- {same[0]}")
+        return odds_lookup[same[0]]
+    if hits:
+        ODDS_FALLBACK_LOG.append(f"{label or norm_name} ({team}): no line; not taking {', '.join(hits)} (other game)")
     return {}
 
 
@@ -481,6 +505,9 @@ def build_odds_lookup(odds):
     """normalized player name -> {market_key: {...}}"""
     if not odds:
         return {}
+    ODDS_GAMES.clear()
+    for name, games in (odds.get("player_games") or {}).items():
+        ODDS_GAMES.setdefault(normalize_name(name), set()).update(t for g in games for t in g)
     return {normalize_name(name): markets for name, markets in odds["player_props"].items()}
 
 
@@ -609,7 +636,7 @@ def build_rows(stats, odds_lookup, weather, injuries, injuries_by_team):
         if not opp or pos not in STAT_MARKET_MAP:
             continue
         norm_name = normalize_name(player_name)
-        player_odds = odds_for_player(odds_lookup, norm_name)
+        player_odds = odds_for_player(odds_lookup, norm_name, info["team"], player_name)
         # A player the books post a line for always gets rows, even if his
         # usage is under the relevance bar (2026-11-06).
         if not player_odds and not RELEVANCE_FILTER.get(pos, lambda a: True)(info["recent_avg"]):
@@ -6046,6 +6073,10 @@ def main():
         msg = f"{len(odds_lookup) - len(unmatched)} of {len(odds_lookup)} players with lines matched to the board"
         if unmatched:
             msg += "; NOT on the board: " + ", ".join(unmatched[:80])
+        if ODDS_FALLBACK_LOG:
+            msg += "; first-initial matches: " + "; ".join(ODDS_FALLBACK_LOG[:40])
+        if not ODDS_GAMES:
+            msg += "; (odds file has no game info -- first-initial matching off)"
         print(msg)
         if __import__("os").environ.get("GITHUB_ACTIONS"):  # main() imports os locally further down
             print("::notice title=Odds names::" + msg.replace("%", "%25"))

@@ -3601,3 +3601,15 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
   - On a Week 6 Mac board the 20 were 12 MUST BETs, then 8 projection-unders.
   - Picks #11-20 are mostly projection-unders: about 58% in the study, vs 65% for MUST BETs. The 20-list as a whole has not been graded out of sample yet.
 
+## Wrong line: Javonte Williams (2026-11-10)
+- Trevor: "javonte williams line is just wrong".
+- **Cause:** the first-initial fallback (added 2026-11-06 for "Nate B") matched on name only.
+  - Early in Week 10 only 22 players had lines.
+  - Javonte Williams (DAL) had none, and Jameson Williams (DET) was the only "J. Williams" posted.
+  - So Javonte's receptions / receiving yards rows showed Jameson's lines. Reproduced with the old code: 4.5 / 55.5.
+- **Fix:**
+  - `fetch_odds.py` now records `player_games` (each odds name's game).
+  - `odds_for_player()` only uses lines from an odds name whose game includes the player's team. This applies to exact names too.
+  - With no game info (an older odds file), exact names match but the fallback is off.
+  - The "Odds names" notice lists every first-initial match and every refusal.
+

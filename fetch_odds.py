@@ -222,6 +222,10 @@ def main():
     print(f"Found {len(matching)} of {len(target_games)} target games on the odds board.")
 
     all_props = {}
+    # Which game each player's lines came from (2026-11-10): the board only
+    # gives a row these lines if his team is in that game, so a name match
+    # can't hand one player another team's lines.
+    player_games = {}
     event_summaries = []
     for i, event in enumerate(matching, 1):
         label = f"{event['away_team']} @ {event['home_team']}"
@@ -236,6 +240,7 @@ def main():
         )
         for player, markets_for_player in props.items():
             all_props.setdefault(player, {}).update(markets_for_player)
+            player_games.setdefault(player, []).append([event["away_team"], event["home_team"]])
 
     cache = {
         "generated_at": __import__("datetime").datetime.now().isoformat(),
@@ -244,6 +249,7 @@ def main():
         "bookmakers_requested": bookmakers,
         "events": event_summaries,
         "player_props": all_props,
+        "player_games": player_games,
     }
     out_path = DATA_DIR / "odds_cache.json"
     out_path.write_text(json.dumps(cache, indent=2))
