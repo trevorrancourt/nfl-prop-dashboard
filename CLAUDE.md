@@ -101,6 +101,7 @@ It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of
   - **Review:** `REVIEW_SIZE` 10 from `REVIEW_GROUPS` (`must_market` overflow, `proj_under`, `target3`).
   - **Shown as tags on the normal board** (`pickTag`: ⭐ Top 3 / 🔍 Review next to the player name; the hover has the bet, his projection, his last 4 games and the group's record). The separate panel and "Show full board" were removed 2026-11-10, per Trevor: "let's keep the original board for now and just display the picks there ... i want to see the info so i can decide like i've been ... we'll slowly work on changes". **Go slowly with UI changes.**
   - TD / INT props are excluded from the projection groups (`PROJ_SKIP_STATS`).
+  - **One ranked list** (2026-11-10, per Trevor: "shouldn't we have one thing of bets to review that we actually think are good?"). Review is ordered by group record, then by strength inside the group: `must_market` by least juice, projection/🎯 by |Anticipated - line| / line. Tags read "⭐ Top 3 #n" / "🔍 Review #n". With the default sort (`signal_rank`), `render()` puts the Top 3 then the Review rows first, in that order, before the usual tier sort.
   - **Alerts:** come from the Top 3 only.
   - **Out-of-sample test (records from Weeks 4-6, graded on 7-9):** Top 3 9-3, +30% ROI; Review 20-18, +9%. The first version, which ranked all groups, went 2-9.
   - **Projection groups (`projGap`):** Anticipated ≤ 0.73× line → `proj_under` (58% / 57% in the two halves); ≥ 1.5× → `proj_over` (56% / 51%, not in Review).

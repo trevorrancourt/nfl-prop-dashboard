@@ -4309,7 +4309,16 @@ function render() {{
       (!strongMatchupOnly || isStrongMatchup(r)) &&
       (!q || r.player.toLowerCase().includes(q) || r.team.toLowerCase().includes(q) || r.opponent.toLowerCase().includes(q))
     );
+  // Default sort: the Top 3 then Review picks first, in their order, so the
+  // top of the board IS the list of bets we think are good (2026-11-10).
+  const pickOrder = {{}};
+  if (sortKey === 'signal_rank') {{
+    const tp = topPicks();
+    tp.top.concat(tp.review).forEach((c, i) => {{ pickOrder[markKey(c.e)] = i + 1; }});
+  }}
   rows.sort((a, b) => {{
+    const pa = pickOrder[markKey(a)] || Infinity, pb = pickOrder[markKey(b)] || Infinity;
+    if (pa !== pb) return pa - pb;
     let av = a[sortKey], bv = b[sortKey];
     if (av === null || av === undefined) av = -Infinity;
     if (bv === null || bv === undefined) bv = -Infinity;
@@ -5738,7 +5747,7 @@ function myRulesHtml() {{
   const sec = (title, items) => `<h3 class="modal-section-title">${{title}}</h3><ul style="margin:4px 0 10px 18px; padding:0;">${{items.map(li).join('')}}</ul>`;
   return sec('The groups', [
       '<b>&#11088; MUST BET</b> -- a streak pick the books agree with: he and the defense have been on that side (any streak level), and the books charge extra juice on it, between ' + (MAX_JUICE_PRICE - 1) + ' and ' + MUST_JUICE_MIN + '. In the Weeks 4-9 study those went 65%, and made money up to -170 (not beyond). No role change or lead-back blowout. These are the Top 3 candidates and the phone alerts. A plain streak at a cheap price is only a 3-star (it went 36-29).',
-      '<b>⭐ Top 3 / 🔍 Review tags:</b> marked right on the board next to the player name (hover for the bet, his projection, his last games and why). Top 3 come only from MUST BETs (least juice first, one per game, only if they clear the bar); Review = the next 10 from MUST BETs, 📏 projection-under picks (not TDs/INTs) and 🎯 3-stars -- the groups that held up when tested on weeks they weren\u2019t built from. Phone alerts are the Top 3.',
+      '<b>⭐ Top 3 / 🔍 Review tags:</b> marked right on the board next to the player name (hover for the bet, his projection, his last games and why). Top 3 come only from MUST BETs (least juice first, one per game, only if they clear the bar); Review = the next 10 from MUST BETs, 📏 projection-under picks (not TDs/INTs) and 🎯 3-stars -- the groups that held up when tested on weeks they weren\u2019t built from -- best group first, and inside a group the strongest pick first (least juice / biggest gap between projection and line). With the default sort, these rows sit at the top of the board in that order. Phone alerts are the Top 3.',
       '<b>📏 Projection gaps (Review list):</b> Anticipated 27%+ under the line -> Under (about 57%), 50%+ over -> Over (about 55%); the one number that leaned the same way in both halves of the study.',
       '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
       '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
@@ -5900,6 +5909,7 @@ function topPicks() {{
     const need = impliedProb(bet.price);
     cands.push({{ e, g, bet, rec, p: rec.p, need, value: rec.p - need }});
   }}
+  // Top 3: MUST BETs, least juice first (best value).
   cands.sort((a, b) => (b.value - a.value) || (b.p - a.p));
   const top = [], games = new Set(), used = new Set();
   for (const c of cands) {{
@@ -5907,8 +5917,16 @@ function topPicks() {{
     if (!TOP_GROUPS.includes(c.g) || c.p < TOP_MIN_P || c.value < TOP_MIN_VALUE || games.has(gameKey(c.e))) continue;
     top.push(c); games.add(gameKey(c.e)); used.add(markKey(c.e));
   }}
+  // Review (2026-11-10, per Trevor: "shouldn't we have one thing of bets to
+  // review that we actually think are good?"): the strongest groups first
+  // (by graded record), and inside a group the strongest pick first --
+  // MUST BETs by least juice, projection picks by how far the projection
+  // is from the line -- instead of by price alone.
+  const strength = c => c.g === 'must_market' ? -c.need
+    : (c.e.anticipated && c.bet.line ? Math.abs(c.e.anticipated - c.bet.line) / c.bet.line : 0);
+  const reviewOrder = cands.slice().sort((a, b) => (b.p - a.p) || (strength(b) - strength(a)));
   const review = [];
-  for (const c of cands) {{
+  for (const c of reviewOrder) {{
     if (review.length >= REVIEW_SIZE) break;
     if (used.has(markKey(c.e)) || c.value <= 0) continue;
     review.push(c); used.add(markKey(c.e));
@@ -5954,7 +5972,8 @@ function pickTag(r) {{
     e.must_why ? e.must_why.join('\\n') : null,
     `Why it's here: ${{PICK_GROUPS[c.g]}} -- that kind of pick went ${{c.rec.w}}-${{c.rec.l}} in our graded weeks.`,
   ].filter(Boolean);
-  return ` <span class="cov-tag ${{kind === 'top' ? 'mustbet-tag' : 'cov-review'}}" title="${{escapeHtml(lines.join('\\n'))}}">${{kind === 'top' ? '&#11088; Top 3' : '&#128269; Review'}}</span>`;
+  const n = kind === 'top' ? tp.top.indexOf(c) + 1 : tp.review.indexOf(c) + 1;
+  return ` <span class="cov-tag ${{kind === 'top' ? 'mustbet-tag' : 'cov-review'}}" title="${{escapeHtml(lines.join('\\n'))}}">${{kind === 'top' ? '&#11088; Top 3' : '&#128269; Review'}} #${{n}}</span>`;
 }}
 var fullBoardOpen = false;
 try {{ fullBoardOpen = localStorage.getItem('nfl_prop_dashboard_fullboard_v1') === '1'; }} catch (err) {{}}
