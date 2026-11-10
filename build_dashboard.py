@@ -4339,8 +4339,8 @@ function render() {{
     // (↳) rows in the grouped-by-player view -- an RB's rushing row and
     // receiving row can have different impacts.
     const idCell = sameAsPrev
-      ? '<span class="muted">&rdsh;</span>' + pickTag(r) + impactTags(r) + outlierTag(r) + altLineTag(r)
-      : r.player + pickTag(r) + injuryTag(r) + impactTags(r) + ladderTag(r) + outlierTag(r) + altLineTag(r);
+      ? '<span class="muted">&rdsh;</span>' + impactTags(r) + outlierTag(r) + altLineTag(r)
+      : r.player + injuryTag(r) + impactTags(r) + ladderTag(r) + outlierTag(r) + altLineTag(r);
     const idClass = sameAsPrev ? 'grouped-cell' : '';
     html += `
     <tr class="${{groupingActive && isLastOfGroup ? 'group-end' : ''}}" data-player="${{escapeHtml(r.player)}}">
@@ -4359,7 +4359,7 @@ function render() {{
       <td>${{fmt(r.anticipated)}}</td>
       <td class="${{edgeClass(r.edge_pct)}}">${{fmt(r.edge)}}</td>
       <td class="${{edgeClass(r.anc_edge_pct)}}">${{fmt(r.anc_edge)}}</td>
-      <td>${{signalEmoji(r)}}${{fullYearTag(r)}}${{scriptTag(r)}}</td>
+      <td>${{pickTag(r)}}${{signalEmoji(r)}}${{fullYearTag(r)}}${{scriptTag(r)}}</td>
       <td class="win-col">${{winCellHtml(r)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.draftkings_line, bookCellPrice(r, 'draftkings'), r.show_side || r.direction)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.fanduel_line, bookCellPrice(r, 'fanduel'), r.show_side || r.direction)}}</td>
@@ -5747,7 +5747,7 @@ function myRulesHtml() {{
   const sec = (title, items) => `<h3 class="modal-section-title">${{title}}</h3><ul style="margin:4px 0 10px 18px; padding:0;">${{items.map(li).join('')}}</ul>`;
   return sec('The groups', [
       '<b>&#11088; MUST BET</b> -- a streak pick the books agree with: he and the defense have been on that side (any streak level), and the books charge extra juice on it, between ' + (MAX_JUICE_PRICE - 1) + ' and ' + MUST_JUICE_MIN + '. In the Weeks 4-9 study those went 65%, and made money up to -170 (not beyond). No role change or lead-back blowout. These are the Top 3 candidates and the phone alerts. A plain streak at a cheap price is only a 3-star (it went 36-29).',
-      '<b>⭐ Top 3 / 🔍 Review tags:</b> marked right on the board next to the player name (hover for the bet, his projection, his last games and why). Top 3 come only from MUST BETs (least juice first, one per game, only if they clear the bar); Review = the next 10 from MUST BETs, 📏 projection-under picks (not TDs/INTs) and 🎯 3-stars -- the groups that held up when tested on weeks they weren\u2019t built from -- best group first, and inside a group the strongest pick first (least juice / biggest gap between projection and line). With the default sort, these rows sit at the top of the board in that order. Phone alerts are the Top 3.',
+      '<b>⭐ Top 3 / 🔍 Review tags:</b> marked right on the board in the 🔥/🧊/⭐ column (hover for the bet, his projection, his last games and why). Top 3 come only from MUST BETs (least juice first, one per game, only if they clear the bar); Review = the next 10 from MUST BETs, 📏 projection-under picks (not TDs/INTs) and 🎯 3-stars -- the groups that held up when tested on weeks they weren\u2019t built from -- best group first, and inside a group the strongest pick first (least juice / biggest gap between projection and line). With the default sort, these rows sit at the top of the board in that order. Phone alerts are the Top 3.',
       '<b>📏 Projection gaps (Review list):</b> Anticipated 27%+ under the line -> Under (about 57%), 50%+ over -> Over (about 55%); the one number that leaned the same way in both halves of the study.',
       '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
       '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
@@ -5973,7 +5973,7 @@ function pickTag(r) {{
     `Why it's here: ${{PICK_GROUPS[c.g]}} -- that kind of pick went ${{c.rec.w}}-${{c.rec.l}} in our graded weeks.`,
   ].filter(Boolean);
   const n = kind === 'top' ? tp.top.indexOf(c) + 1 : tp.review.indexOf(c) + 1;
-  return ` <span class="cov-tag ${{kind === 'top' ? 'mustbet-tag' : 'cov-review'}}" title="${{escapeHtml(lines.join('\\n'))}}">${{kind === 'top' ? '&#11088; Top 3' : '&#128269; Review'}} #${{n}}</span>`;
+  return `<span class="cov-tag ${{kind === 'top' ? 'mustbet-tag' : 'cov-review'}}" style="margin-right:4px;" title="${{escapeHtml(lines.join('\\n'))}}">${{kind === 'top' ? '&#11088; Top 3' : '&#128269; Review'}} #${{n}}</span>`;
 }}
 var fullBoardOpen = false;
 try {{ fullBoardOpen = localStorage.getItem('nfl_prop_dashboard_fullboard_v1') === '1'; }} catch (err) {{}}
