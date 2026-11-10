@@ -227,6 +227,10 @@ def main():
     # can't hand one player another team's lines.
     player_games = {}
     event_summaries = []
+    # Per-game and per-book counts for the run notice (2026-11-10, per
+    # Trevor: "its way more than 22" -- to see which games/books the API
+    # actually returned props for).
+    per_game, per_book = [], {}
     for i, event in enumerate(matching, 1):
         label = f"{event['away_team']} @ {event['home_team']}"
         print(f"  [{i}/{len(matching)}] Fetching player props: {label}")
@@ -235,6 +239,11 @@ def main():
         if not data:
             continue
         props = parse_event_odds(data)
+        per_game.append(f"{event['away_team'].split()[-1]}@{event['home_team'].split()[-1]} {len(props)}")
+        for pname, mk in props.items():
+            for entry in mk.values():
+                for b in entry["books"]:
+                    per_book.setdefault(b["bookmaker"], set()).add(event["id"] + "|" + pname)
         event_summaries.append(
             {"event_id": event["id"], "matchup": label, "commence_time": event["commence_time"]}
         )
@@ -256,7 +265,11 @@ def main():
     print(f"Saved props for {len(all_props)} players to {out_path}")
     gh_annotate("notice", "Odds API",
                 f"Refreshed {len(matching)} of {len(target_games)} games, {len(all_props)} players; "
-                f"credits left: {LAST_REMAINING:.0f}" if LAST_REMAINING is not None else "credits left: unknown")
+                + (f"credits left: {LAST_REMAINING:.0f}" if LAST_REMAINING is not None else "credits left: unknown")
+                + "; players per game: " + ", ".join(per_game)
+                + "; players per book: " + ", ".join(f"{k} {len(v)}" for k, v in sorted(per_book.items()))
+                + "; games not on the odds board: "
+                + (", ".join(f"{a}@{h}" for a, h in sorted(target_games - {(e['away_team'], e['home_team']) for e in matching})) or "none"))
 
 
 if __name__ == "__main__":
