@@ -4330,7 +4330,11 @@ function render() {{
       e.mark_rank = {{ bet: 3, watch: 2, pass: 0 }}[MARKS[markKey(r)]] ?? 1;
       // A Review pick's book cells show the Review bet's side, line and best book.
       const pf = pickFor(e);
-      if (pf) Object.assign(e, {{ show_side: pf.c.bet.side, show_best_book: pf.c.bet.book, show_best_line: pf.c.bet.line }});
+      // (bet.book is the short label, e.g. 'DK'; the highlight needs the book key.)
+      if (pf) {{
+        const bk = (BET_BOOKS.find(([k, label]) => label === pf.c.bet.book) || [])[0] || null;
+        Object.assign(e, {{ show_side: pf.c.bet.side, show_best_book: bk, show_best_line: pf.c.bet.line }});
+      }}
       return e;
     }})
     .filter(r =>

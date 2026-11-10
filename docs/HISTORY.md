@@ -3629,5 +3629,7 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
   - Added a "Review list" build notice (shown / in-group rows with a price / props with lines) to see why the list is short.- Then: "get rid of the purple highligh behind under and the emoji. and get rid of the word under".
   - The side is now a plain bold ▲ / ▼ after the tag (hover says Over/Under).
   - He also asked "only unders?". With few lines posted, no MUST BET qualified yet, so the list was all `proj_under`.
-  - `proj_over` stays out of the list: it went 51% (162-155) out of sample.
+  - `proj_over` stays out of the list: it went 51% (162-155) out of sample.- Then: "why did it stop highlighting the preferred book to bet from?"
+  - Bug from the Review-only change: `render()` set `show_best_book` to the bet's short label ('DK'), but the highlight compares book keys ('draftkings'), so Review rows lost the highlight.
+  - Fixed by mapping the label through `BET_BOOKS`.
 
