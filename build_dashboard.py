@@ -4276,6 +4276,7 @@ function markSelect(r) {{
 }}
 
 function render() {{
+  _topCache = null; // marks may have changed; Top 3 / Review tags recompute
   document.getElementById('th-recent-avg').textContent = 'Avg (' + weeksLabel(selectedWeeks) + ')';
   // The How-picky slider only drives the Average-edge formula.
   if (SIGNAL_MODE === 'consistency') {{
@@ -4329,8 +4330,8 @@ function render() {{
     // (↳) rows in the grouped-by-player view -- an RB's rushing row and
     // receiving row can have different impacts.
     const idCell = sameAsPrev
-      ? '<span class="muted">&rdsh;</span>' + impactTags(r) + outlierTag(r) + altLineTag(r)
-      : r.player + injuryTag(r) + impactTags(r) + ladderTag(r) + outlierTag(r) + altLineTag(r);
+      ? '<span class="muted">&rdsh;</span>' + pickTag(r) + impactTags(r) + outlierTag(r) + altLineTag(r)
+      : r.player + pickTag(r) + injuryTag(r) + impactTags(r) + ladderTag(r) + outlierTag(r) + altLineTag(r);
     const idClass = sameAsPrev ? 'grouped-cell' : '';
     html += `
     <tr class="${{groupingActive && isLastOfGroup ? 'group-end' : ''}}" data-player="${{escapeHtml(r.player)}}">
@@ -5737,7 +5738,7 @@ function myRulesHtml() {{
   const sec = (title, items) => `<h3 class="modal-section-title">${{title}}</h3><ul style="margin:4px 0 10px 18px; padding:0;">${{items.map(li).join('')}}</ul>`;
   return sec('The groups', [
       '<b>&#11088; MUST BET</b> -- a streak pick the books agree with: he and the defense have been on that side (any streak level), and the books charge extra juice on it, between ' + (MAX_JUICE_PRICE - 1) + ' and ' + MUST_JUICE_MIN + '. In the Weeks 4-9 study those went 65%, and made money up to -170 (not beyond). No role change or lead-back blowout. These are the Top 3 candidates and the phone alerts. A plain streak at a cheap price is only a 3-star (it went 36-29).',
-      '<b>⭐ Top 3 / 🔍 Review:</b> the Top 3 come only from MUST BETs (least juice first, one per game, only if they clear the bar). Review = the next best from MUST BETs, 📏 projection-under picks and 🎯 3-stars -- the groups that held up when tested on weeks they weren\u2019t built from. Everything else is under Show full board.',
+      '<b>⭐ Top 3 / 🔍 Review tags:</b> marked right on the board next to the player name (hover for the bet, his projection, his last games and why). Top 3 come only from MUST BETs (least juice first, one per game, only if they clear the bar); Review = the next 10 from MUST BETs, 📏 projection-under picks (not TDs/INTs) and 🎯 3-stars -- the groups that held up when tested on weeks they weren\u2019t built from. Phone alerts are the Top 3.',
       '<b>📏 Projection gaps (Review list):</b> Anticipated 27%+ under the line -> Under (about 57%), 50%+ over -> Over (about 55%); the one number that leaned the same way in both halves of the study.',
       '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
       '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
@@ -5853,7 +5854,9 @@ function pickGroup(e) {{
 // Under when it's 27%+ below the line (about 57%), Over when 50%+ above (54-56%).
 const PROJ_UNDER_RATIO = 0.73;
 const PROJ_OVER_RATIO = 1.5;
+const PROJ_SKIP_STATS = new Set(['total_tds', 'passing_tds', 'passing_interceptions']);
 function projGap(e) {{
+  if (PROJ_SKIP_STATS.has(e.stat_col)) return null;
   const line = e.vegas_line;
   if (e.anticipated === null || e.anticipated === undefined || line === null || line === undefined || line <= 0) return null;
   if (e.anticipated <= PROJ_UNDER_RATIO * line) return {{ group: 'proj_under', side: 'under' }};
@@ -5924,22 +5927,39 @@ function topRowHtml(c, n) {{
     + `<td><b>${{Math.round(c.p * 100)}}%</b> <span class="muted">/ ${{Math.round(c.need * 100)}}%</span></td>`
     + `<td class="muted" style="white-space:normal;">${{escapeHtml(PICK_GROUPS[c.g])}} <span>(${{recTxt}})</span></td></tr>`;
 }}
+// The separate Top 3 / Review panel was removed the next day (2026-11-10,
+// per Trevor: "let's keep the original board for now and just display the
+// picks there ... i want to see the info so i can decide like i've been").
+// Picks are tagged on the normal board instead (pickTag); topPicks() still
+// drives the tags and the phone alerts.
 function renderTopPanel() {{
   const el = document.getElementById('topPanel');
-  if (!el) return;
-  _topCache = null;
-  const {{ top, review }} = topPicks();
-  const head = '<thead><tr><th>#</th><th>Mark</th><th>Player</th><th>Bet</th><th title="Estimated win chance (from this kind of pick&#39;s graded record) / what the price needs to break even">Win / need</th><th>Why (record so far)</th></tr></thead>';
-  el.innerHTML = `<div class="top-head"><h2>&#11088; Top ${{TOP_SIZE}} this week</h2><span class="muted">${{top.length ? 'Only picks that clear the bar: ' + Math.round(TOP_MIN_P * 100) + '%+ estimated and ' + Math.round(TOP_MIN_VALUE * 100) + '+ points better than the price needs. These are the only phone alerts.' : 'Nothing clears the bar right now -- check back after more lines post (most go up Thursday-Sunday).'}}</span></div>`
-    + (top.length ? `<table class="modal-table top-table">${{head}}<tbody>${{top.map((c, i) => topRowHtml(c, i + 1)).join('')}}</tbody></table>` : '')
-    + `<div class="top-head" style="margin-top:14px;"><h2>&#128269; Review (${{review.length}})</h2><span class="muted">The next best -- worth your own look before betting. Hover a row for why.</span></div>`
-    + (review.length ? `<table class="modal-table top-table">${{head}}<tbody>${{review.map((c, i) => topRowHtml(c, i + 1)).join('')}}</tbody></table>` : '<p class="muted">Nothing yet.</p>')
-    + `<button type="button" id="fullBoardBtn" class="pos-btn" style="margin-top:12px;">${{fullBoardOpen ? '&#9650; Hide full board' : '&#9660; Show full board'}}</button>`;
+  if (el) el.innerHTML = '';
+}}
+// A ⭐ Top 3 / 🔍 Review tag next to the player name, with this pick's own
+// details in the hover (the bet, his projection, his last games, why).
+function pickTag(r) {{
+  const tp = topPicks();
+  const k = markKey(r);
+  let c = tp.top.find(x => markKey(x.e) === k), kind = 'top';
+  if (!c) {{ c = tp.review.find(x => markKey(x.e) === k); kind = 'review'; }}
+  if (!c) return '';
+  const e = c.e, b = c.bet;
+  const r1 = v => Math.round(v * 10) / 10;
+  const last = playerSelectedIndices(e, seasonWeeks()).slice(0, 4).map(i => r1(e.game_log[i]));
+  const lines = [
+    `${{kind === 'top' ? '⭐ TOP 3' : '🔍 REVIEW'}}: ${{b.side === 'over' ? 'Over' : 'Under'}} ${{b.line}} ${{e.stat_label}} at ${{b.price > 0 ? '+' : ''}}${{b.price}} (${{b.book}})`,
+    e.anticipated !== null && e.anticipated !== undefined ? `Projects ${{r1(e.anticipated)}} vs the ${{b.line}} line` : null,
+    last.length ? `Last ${{last.length}} games: ${{last.join(', ')}}` : null,
+    e.must_why ? e.must_why.join('\\n') : null,
+    `Why it's here: ${{PICK_GROUPS[c.g]}} -- that kind of pick went ${{c.rec.w}}-${{c.rec.l}} in our graded weeks.`,
+  ].filter(Boolean);
+  return ` <span class="cov-tag ${{kind === 'top' ? 'mustbet-tag' : 'cov-review'}}" title="${{escapeHtml(lines.join('\\n'))}}">${{kind === 'top' ? '&#11088; Top 3' : '&#128269; Review'}}</span>`;
 }}
 var fullBoardOpen = false;
 try {{ fullBoardOpen = localStorage.getItem('nfl_prop_dashboard_fullboard_v1') === '1'; }} catch (err) {{}}
 function applyFullBoard() {{
-  document.body.classList.toggle('board-collapsed', !fullBoardOpen);
+  document.body.classList.remove('board-collapsed'); // the board is always shown again (2026-11-10)
 }}
 document.addEventListener('click', ev => {{
   if (!ev.target.closest('#fullBoardBtn')) return;

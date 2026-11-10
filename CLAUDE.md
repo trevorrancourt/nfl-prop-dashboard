@@ -99,7 +99,8 @@ It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of
 - **⭐ Top 3 / 🔍 Review lists** (2026-11-09, per Trevor: "3 must bets per week that seem to have been proven ... 15ish ... i'm feeling overwhelmed"; he chose "only show ones that clear the bar"). `topPicks()`: every row gets `pickGroup()` + `pickBet()`. The estimated chance is the group's record in `results/track_record.json` shrunk 20 games toward 50%; value = estimate - price break-even.
   - **Top 3:** only `TOP_GROUPS` (`must_market`), least juice first, one per game, p ≥ 56% and value ≥ 2 points.
   - **Review:** `REVIEW_SIZE` 10 from `REVIEW_GROUPS` (`must_market` overflow, `proj_under`, `target3`).
-  - **Everything else:** under "Show full board".
+  - **Shown as tags on the normal board** (`pickTag`: ⭐ Top 3 / 🔍 Review next to the player name; the hover has the bet, his projection, his last 4 games and the group's record). The separate panel and "Show full board" were removed 2026-11-10, per Trevor: "let's keep the original board for now and just display the picks there ... i want to see the info so i can decide like i've been ... we'll slowly work on changes". **Go slowly with UI changes.**
+  - TD / INT props are excluded from the projection groups (`PROJ_SKIP_STATS`).
   - **Alerts:** come from the Top 3 only.
   - **Out-of-sample test (records from Weeks 4-6, graded on 7-9):** Top 3 9-3, +30% ROI; Review 20-18, +9%. The first version, which ranked all groups, went 2-9.
   - **Projection groups (`projGap`):** Anticipated ≤ 0.73× line → `proj_under` (58% / 57% in the two halves); ≥ 1.5× → `proj_over` (56% / 51%, not in Review).
