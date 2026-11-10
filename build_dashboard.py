@@ -4309,7 +4309,7 @@ function render() {{
       (!strongMatchupOnly || isStrongMatchup(r)) &&
       (!q || r.player.toLowerCase().includes(q) || r.team.toLowerCase().includes(q) || r.opponent.toLowerCase().includes(q))
     );
-  // Default sort: the Top 3 then Review picks first, in their order, so the
+  // Default sort: the Review #1..#20 picks first, in their order, so the
   // top of the board IS the list of bets we think are good (2026-11-10).
   const pickOrder = {{}};
   if (sortKey === 'signal_rank') {{
@@ -5747,7 +5747,7 @@ function myRulesHtml() {{
   const sec = (title, items) => `<h3 class="modal-section-title">${{title}}</h3><ul style="margin:4px 0 10px 18px; padding:0;">${{items.map(li).join('')}}</ul>`;
   return sec('The groups', [
       '<b>&#11088; MUST BET</b> -- a streak pick the books agree with: he and the defense have been on that side (any streak level), and the books charge extra juice on it, between ' + (MAX_JUICE_PRICE - 1) + ' and ' + MUST_JUICE_MIN + '. In the Weeks 4-9 study those went 65%, and made money up to -170 (not beyond). No role change or lead-back blowout. These are the Top 3 candidates and the phone alerts. A plain streak at a cheap price is only a 3-star (it went 36-29).',
-      '<b>⭐ Top 3 / 🔍 Review tags:</b> marked right on the board in the 🔥/🧊/⭐ column (hover for the bet, his projection, his last games and why). Top 3 come only from MUST BETs (least juice first, one per game, only if they clear the bar); Review = the next 10 from MUST BETs, 📏 projection-under picks (not TDs/INTs) and 🎯 3-stars -- the groups that held up when tested on weeks they weren\u2019t built from -- best group first, and inside a group the strongest pick first (least juice / biggest gap between projection and line). With the default sort, these rows sit at the top of the board in that order. Phone alerts are the Top 3.',
+      '<b>🔍 Review #1-#' + LIST_SIZE + ' tags:</b> the ' + LIST_SIZE + ' best bets on the board, one ranked list, marked right on the board in the 🔥/🧊/⭐ column (hover for the bet, his projection, his last games and why). They come only from the groups that held up when tested on weeks they weren\u2019t built from: MUST BETs first, then 📏 projection-under picks (not TDs/INTs) and 🎯 3-stars -- best group first, and inside a group the strongest pick first (least juice / biggest gap between projection and line). The gold ones (#1-#3) are the best-priced MUST BETs, one per game, that clear the bar: those are the phone alerts. A row only makes the list if its price still leaves value. With the default sort, these rows sit at the top of the board in order.',
       '<b>📏 Projection gaps (Review list):</b> Anticipated 27%+ under the line -> Under (about 57%), 50%+ over -> Over (about 55%); the one number that leaned the same way in both halves of the study.',
       '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
       '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
@@ -5810,8 +5810,11 @@ function blowoutGamesText(r) {{
 // coin flip) so a 3-0 group can't jump the line. Value = that chance minus
 // the break-even of the bet's price. Top 3 = the best values that clear the
 // bar (TOP_MIN_P and TOP_MIN_VALUE, at most one per game; can be fewer, per
-// Trevor: "only show ones that clear the bar"); Review = the next REVIEW_SIZE.
-// The rest of the board sits under "Show full board". Only the Top 3 buzz.
+// Trevor: "only show ones that clear the bar"); Review = the next ones, up to
+// LIST_SIZE in all. Only the Top 3 buzz.
+// 2026-11-10, per Trevor: "the top 20 best bets at all time" -- one ranked
+// list of LIST_SIZE (20), all tagged 🔍 Review #1..#20 on the board; the
+// Top 3 are simply #1-#3 (gold tag) and are still the phone alerts.
 const TOP_PRIOR = 20;
 // Which groups may fill the lists (2026-11-09, after the out-of-sample test:
 // ranking every group by its record put small, lucky groups on top and the
@@ -5823,7 +5826,7 @@ const REVIEW_GROUPS = ['must_market', 'proj_under', 'target3'];
 const TOP_MIN_P = 0.56;
 const TOP_MIN_VALUE = 0.02;
 const TOP_SIZE = 3;
-const REVIEW_SIZE = 10;
+const LIST_SIZE = 20; // Top 3 + Review together
 const PICK_GROUPS = {{
   must_market: 'MUST BET: streak + the books agree (-131 to -170)',
   proj_under: 'Projection 27%+ under the line (Under)',
@@ -5927,7 +5930,7 @@ function topPicks() {{
   const reviewOrder = cands.slice().sort((a, b) => (b.p - a.p) || (strength(b) - strength(a)));
   const review = [];
   for (const c of reviewOrder) {{
-    if (review.length >= REVIEW_SIZE) break;
+    if (top.length + review.length >= LIST_SIZE) break;
     if (used.has(markKey(c.e)) || c.value <= 0) continue;
     review.push(c); used.add(markKey(c.e));
   }}
@@ -5954,26 +5957,27 @@ function renderTopPanel() {{
   const el = document.getElementById('topPanel');
   if (el) el.innerHTML = '';
 }}
-// A ⭐ Top 3 / 🔍 Review tag next to the player name, with this pick's own
-// details in the hover (the bet, his projection, his last games, why).
+// A 🔍 Review #n tag in the signal column (one ranked list of LIST_SIZE,
+// 2026-11-10), with this pick's own details in the hover (the bet, his
+// projection, his last games, why). #1-#3 = the Top 3 (gold, phone alerts).
 function pickTag(r) {{
   const tp = topPicks();
+  const all = tp.top.concat(tp.review);
   const k = markKey(r);
-  let c = tp.top.find(x => markKey(x.e) === k), kind = 'top';
-  if (!c) {{ c = tp.review.find(x => markKey(x.e) === k); kind = 'review'; }}
-  if (!c) return '';
-  const e = c.e, b = c.bet;
+  const n = all.findIndex(x => markKey(x.e) === k) + 1;
+  if (!n) return '';
+  const c = all[n - 1], e = c.e, b = c.bet, alert = n <= tp.top.length;
   const r1 = v => Math.round(v * 10) / 10;
   const last = playerSelectedIndices(e, seasonWeeks()).slice(0, 4).map(i => r1(e.game_log[i]));
   const lines = [
-    `${{kind === 'top' ? '⭐ TOP 3' : '🔍 REVIEW'}}: ${{b.side === 'over' ? 'Over' : 'Under'}} ${{b.line}} ${{e.stat_label}} at ${{b.price > 0 ? '+' : ''}}${{b.price}} (${{b.book}})`,
+    `🔍 REVIEW #${{n}} of ${{all.length}}: ${{b.side === 'over' ? 'Over' : 'Under'}} ${{b.line}} ${{e.stat_label}} at ${{b.price > 0 ? '+' : ''}}${{b.price}} (${{b.book}})`,
+    alert ? '📲 Also a phone alert: one of the best-priced MUST BETs (max one per game).' : null,
     e.anticipated !== null && e.anticipated !== undefined ? `Projects ${{r1(e.anticipated)}} vs the ${{b.line}} line` : null,
     last.length ? `Last ${{last.length}} games: ${{last.join(', ')}}` : null,
     e.must_why ? e.must_why.join('\\n') : null,
     `Why it's here: ${{PICK_GROUPS[c.g]}} -- that kind of pick went ${{c.rec.w}}-${{c.rec.l}} in our graded weeks.`,
   ].filter(Boolean);
-  const n = kind === 'top' ? tp.top.indexOf(c) + 1 : tp.review.indexOf(c) + 1;
-  return `<span class="cov-tag ${{kind === 'top' ? 'mustbet-tag' : 'cov-review'}}" style="margin-right:4px;" title="${{escapeHtml(lines.join('\\n'))}}">${{kind === 'top' ? '&#11088; Top 3' : '&#128269; Review'}} #${{n}}</span>`;
+  return `<span class="cov-tag ${{alert ? 'mustbet-tag' : 'cov-review'}}" style="margin-right:4px;" title="${{escapeHtml(lines.join('\\n'))}}">&#128269; Review #${{n}}</span>`;
 }}
 var fullBoardOpen = false;
 try {{ fullBoardOpen = localStorage.getItem('nfl_prop_dashboard_fullboard_v1') === '1'; }} catch (err) {{}}

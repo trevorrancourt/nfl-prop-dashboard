@@ -3586,3 +3586,18 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
   - flat stakes / ROI
   - bet MUST BETs early (lines moved toward the books' lean)
   - Tuesday routine
+
+## Board tags and one list of 20 (2026-11-10)
+- **Panel removed:** Trevor: "i don't understand this reformatting view". Then: "let's keep the original board for now and just display the picks there. we'll slowly work on changes".
+  - The Top 3 / Review panel and "Show full board" are gone; the full board is always shown.
+  - Picks are tags on the board (`pickTag`), moved into the 🔥/🧊/⭐ cell because a narrow Player column cut them off.
+- **One ranked list:** Trevor: "shouldn't we have one thing of bets to review that we actually think are good?"
+  - Review is ordered by group record, then strength (MUST: least juice; projection/🎯: gap to the line).
+  - The default sort puts the list first.
+- **Top 20:** Trevor: "let's adjust it where we just see the top 20 best bets at all time". He picked tags on the full board, and "i like the review concept".
+  - `LIST_SIZE` = 20 (was 3 + 10). Every tag reads "🔍 Review #n".
+  - #1-#3 are the old Top 3: gold, and still the only phone alerts.
+  - The old emojis stay.
+  - On a Week 6 Mac board the 20 were 12 MUST BETs, then 8 projection-unders.
+  - Picks #11-20 are mostly projection-unders: about 58% in the study, vs 65% for MUST BETs. The 20-list as a whole has not been graded out of sample yet.
+
