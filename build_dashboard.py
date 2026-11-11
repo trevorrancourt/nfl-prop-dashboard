@@ -2231,23 +2231,74 @@ function snapshotPassLine(key) {{
   const m = side ? bestMarketFor(e, side) : null;
   if (m) {{ MARKS['pline|' + key] = `${{side}}|${{m.line}}|${{m.price}}`; saveMarks(); }}
 }}
+// Your own words (2026-11-11, per Trevor: "when i react to a bet i tell you in
+// words why i didn't like it in the webpage and it can build that into the
+// model"). MARKS['note|' + key] = 'n:' + text (the prefix keeps a note that
+// says just "pass" from being read as a mark) and MARKS['ctx|' + key] = what
+// the board said at that moment: group|Review #|projection. Both sync with the
+// rest of your marks and ride along in the My Bets backup;
+// scripts/review_my_week.py reads them, grades them against what happened,
+// and the reasons that keep being right become rules (nothing changes the
+// model on its own).
+const NOTE_MAX = 400;
+function noteText(key) {{
+  const v = MARKS['note|' + key];
+  return typeof v === 'string' && v.startsWith('n:') ? v.slice(2) : '';
+}}
+function snapshotPickContext(key) {{
+  const live = ROWS.find(r => markKey(r) === key);
+  if (!live) return;
+  // Passed rows are left out of the Review list, so look at the row as if it
+  // were still unmarked.
+  const prev = MARKS[key];
+  delete MARKS[key]; _topCache = null;
+  let g = '', n = '', ant = '';
+  try {{
+    const e = enrichRow(live, selectedWeeks, {{}});
+    const pf = pickFor(e);
+    g = pf ? pf.c.g : (pickGroup(e) || '');
+    n = pf ? pf.n : '';
+    ant = e.anticipated === null || e.anticipated === undefined ? '' : Math.round(e.anticipated * 10) / 10;
+  }} finally {{
+    if (prev !== undefined) MARKS[key] = prev;
+    _topCache = null;
+  }}
+  MARKS['ctx|' + key] = [g, n, ant].join('|');
+  saveMarks();
+}}
 function openReasonPicker(key, kind) {{
   closePlayerModal();
   const m = parseBetKey(key);
   const list = kind === 'bet' ? BET_REASONS : PASS_REASONS;
   document.getElementById('modalPlayerName').textContent = kind === 'bet' ? 'Why do you like it?' : 'Why pass?';
-  document.getElementById('modalMeta').textContent = `${{m.player}} · ${{statLabelFor(m.stat_col)}} -- one tap; the weekly review grades your reasons`;
-  document.getElementById('modalBody').innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:8px;">'
-    + list.map(([v, label]) => `<button type="button" class="pos-btn reason-btn" data-kind="${{kind}}" data-key="${{escapeHtml(key)}}" data-reason="${{v}}">${{label}}</button>`).join('')
-    + `<button type="button" class="pos-btn reason-btn" data-kind="${{kind}}" data-key="${{escapeHtml(key)}}" data-reason="">Skip</button></div>`;
+  document.getElementById('modalMeta').textContent = `${{m.player}} · ${{statLabelFor(m.stat_col)}} -- say it in your own words, tap a tag, or both`;
+  const attrs = `data-kind="${{kind}}" data-key="${{escapeHtml(key)}}"`;
+  document.getElementById('modalBody').innerHTML =
+    `<textarea id="reasonNote" maxlength="${{NOTE_MAX}}" rows="3" placeholder="${{kind === 'bet' ? 'Why do you like it?' : 'Why don\u2019t you like it?'}} (optional)" style="width:100%; background:var(--panel); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:6px; font:inherit; resize:vertical;">${{escapeHtml(noteText(key))}}</textarea>`
+    + `<div class="modal-note" style="margin:6px 0 10px;">Each week I read these, check which reasons actually turned out right, and turn the ones that hold up into rules.</div>`
+    + '<div style="display:flex; flex-wrap:wrap; gap:8px;">'
+    + list.map(([v, label]) => `<button type="button" class="pos-btn reason-btn" ${{attrs}} data-reason="${{v}}">${{label}}</button>`).join('')
+    + '</div><div style="display:flex; gap:8px; margin-top:12px;">'
+    + `<button type="button" class="pos-btn reason-btn" style="background:var(--accent); border-color:var(--accent);" ${{attrs}} data-reason="__save">Save</button>`
+    + `<button type="button" class="pos-btn reason-btn" ${{attrs}} data-reason="">Skip</button></div>`;
   document.getElementById('playerModalOverlay').style.display = 'flex';
+  const box = document.getElementById('reasonNote');
+  if (box) box.focus();
 }}
 function openPassReason(key) {{ openReasonPicker(key, 'pass'); }}
 document.addEventListener('click', e => {{
   const b = e.target.closest('.reason-btn');
   if (!b) return;
-  const pre = b.dataset.kind === 'bet' ? 'like|' : 'why|';
-  if (b.dataset.reason) MARKS[pre + b.dataset.key] = b.dataset.reason; else delete MARKS[pre + b.dataset.key];
+  const key = b.dataset.key, pre = b.dataset.kind === 'bet' ? 'like|' : 'why|';
+  const box = document.getElementById('reasonNote');
+  const text = box ? box.value.trim().slice(0, NOTE_MAX) : '';
+  const r = b.dataset.reason;
+  if (r === '') {{ // Skip: keep nothing
+    delete MARKS[pre + key]; delete MARKS['note|' + key];
+  }} else {{
+    if (r !== '__save') MARKS[pre + key] = r; // a tag tap saves the tag and any words; Save keeps just the words
+    if (text) MARKS['note|' + key] = 'n:' + text; else delete MARKS['note|' + key];
+  }}
   saveMarks();
   closePlayerModal();
   render();
@@ -4900,6 +4951,9 @@ function onMarkChange(e) {{
   for (const [pre, keep] of [['why|', 'pass'], ['pline|', 'pass'], ['like|', 'bet']]) {{
     if (sel.value !== keep && MARKS[pre + key]) {{ delete MARKS[pre + key]; saveMarks(); }}
   }}
+  // A note and the board's context belong to the current pass / bet only.
+  for (const pre of ['note|', 'ctx|']) if (MARKS[pre + key]) delete MARKS[pre + key];
+  if (sel.value === 'pass' || sel.value === 'bet') snapshotPickContext(key);
   if (sel.value === 'pass') {{ snapshotPassLine(key); openPassReason(key); return; }}
   if (sel.value === 'bet') {{ openReasonPicker(key, 'bet'); return; }}
   render();
@@ -5788,6 +5842,8 @@ function myRulesHtml() {{
   const sec = (title, items) => `<h3 class="modal-section-title">${{title}}</h3><ul style="margin:4px 0 10px 18px; padding:0;">${{items.map(li).join('')}}</ul>`;
   return sec('The board (2026-11-10)', [
       '<b>&#128269; Review #1-#' + LIST_SIZE + '</b> is the only pick label on the board now. The streak tiers below (&#128293;/&#129482;/&#11088;/&#128161;/&#10067;) still run underneath -- MUST BETs and &#127919; 3-stars feed the Review list -- but they are no longer shown. Flags on a Review pick: &#128197; the full season agrees with the bet, &#10004;/&#9888; script = the game script backs it / argues against it. Next to the player name: &#127919; outlier defense, &#11014; alt-line idea, &#129692; ladder board, &#129657; injuries.',
+    ]) + sec('Your reasons (2026-11-11)', [
+      'When you mark a row &#10060; Pass or &#9989; Bet, a box opens: say why in your own words, tap a tag, or both. It is saved with your marks (synced to your account, included in the My Bets backup) together with what the board said at that moment. Each week you paste the backup to me: I grade every reason against what actually happened (would the board\u2019s side have won?) and turn the ones that keep being right into rules. Nothing changes the model by itself.',
     ]) + sec('The groups', [
       '<b>&#11088; MUST BET</b> -- a streak pick the books agree with: he and the defense have been on that side (any streak level), and the books charge extra juice on it, between ' + (MAX_JUICE_PRICE - 1) + ' and ' + MUST_JUICE_MIN + '. In the Weeks 4-9 study those went 65%, and made money up to -170 (not beyond). No role change or lead-back blowout. These are the Top 3 candidates and the phone alerts. A plain streak at a cheap price is only a 3-star (it went 36-29).',
       '<b>🔍 Review #1-#' + LIST_SIZE + ' tags:</b> the ' + LIST_SIZE + ' best bets on the board, one ranked list, marked right on the board in the 🔍 Review column (hover for the bet, his projection, his last games and why). They come only from the groups that held up when tested on weeks they weren\u2019t built from: MUST BETs first, then 📏 projection-under picks (not TDs/INTs) and 🎯 3-stars -- best group first, and inside a group the strongest pick first (least juice / biggest gap between projection and line). The gold ones (#1-#3) are the best-priced MUST BETs, one per game, that clear the bar: those are the phone alerts. A row only makes the list if its price still leaves value. With the default sort, these rows sit at the top of the board in order.',

@@ -11,6 +11,14 @@ grades, for the given week(s):
     A pass was "right" when that bet would have lost.
 Also breaks your bets down by stat, Over/Under and stake size.
 
+Your own words (2026-11-11, per Trevor: "when i react to a bet i tell you in
+words why i didn't like it ... build that into the model"): the picker's text
+box is saved as MARKS['note|' + key] = 'n:' + text, with MARKS['ctx|' + key] =
+"group|Review #|projection" (what the board said at that moment). This prints
+each note next to what happened, and tallies them by theme. It never changes
+the model: the themes that keep being right over several weeks are what get
+turned into rules, and the weekly output is for a person to read.
+
     python3 scripts/review_my_week.py backup.json --weeks 10
 """
 import argparse
@@ -32,6 +40,24 @@ LABELS = {
 def dec(o):
     o = float(o)
     return 1 + o / 100 if o > 0 else 1 + 100 / abs(o)
+
+
+# Rough themes found by keyword in your own words -- a first sort, not a model.
+THEMES = [
+    ("injury / news", ("injur", "hurt", "questionable", "doubtful", "limited", "concussion", "news", "status", "dnp", "inactive")),
+    ("role / usage", ("role", "snap", "target", "touch", "carries", "committee", "backup", "depth", "usage", "volume", "replac", "returns", "back from", "workload", "rotation")),
+    ("matchup", ("matchup", "defense", "corner", "coverage", "shadow", "pass rush", "front seven", "tough")),
+    ("game script", ("script", "blowout", "garbage", "trailing", "pace", "spread", "total", "favorite", "underdog")),
+    ("line / price", ("line", "price", "juice", "number", "moved", "stale", "odds", "vig", "steam")),
+    ("weather", ("wind", "rain", "snow", "weather", "cold")),
+    ("small sample / fluke", ("sample", "fluke", "one game", "lucky", "regress", "outlier")),
+    ("gut", ("gut", "feel", "vibe", "don't like", "dont like")),
+]
+
+
+def themes_of(text):
+    t = text.lower()
+    return [name for name, words in THEMES if any(w in t for w in words)] or ["(no theme matched)"]
 
 
 def main():
@@ -110,6 +136,64 @@ def main():
             out.append(f"  {k:24s} would have gone {rec(rs)}  -> right to pass {rs.count('L')} of {len(rs)}")
     else:
         out.append("  none with a saved line yet (lines are saved on passes from Nov 9 on)")
+    # Your own words, next to what happened.
+    notes = []
+    for key, v in marks.items():
+        if not key.startswith("note|") or not isinstance(v, str) or not v.startswith("n:"):
+            continue
+        bkey = key[5:]
+        try:
+            week, player, team, col = bkey.split("|")
+            week = int(week)
+        except ValueError:
+            continue
+        if week not in a.weeks:
+            continue
+        kind = marks.get(bkey)
+        if kind not in ("pass", "bet"):
+            continue
+        ctx = (marks.get("ctx|" + bkey) or "||").split("|") + ["", "", ""]
+        group, rank, ant = ctx[0], ctx[1], ctx[2]
+        if kind == "pass":
+            side = line = None
+            if ("pline|" + bkey) in marks:
+                side, line, _price = marks["pline|" + bkey].split("|")
+            res = grade(stat(week, player, team, col), side, float(line)) if side else None
+            shown = f"board: {side[0].upper()} {line}" if side else "board line not saved"
+            verdict = {"W": "board's side WON (passing cost you)", "L": "board's side LOST (right to pass)", None: "no result yet"}[res]
+        else:
+            b = bets.get(bkey, {})
+            res = {"win": "W", "loss": "L"}.get(b.get("result"))
+            if res is None and b.get("line") and b.get("side"):
+                res = grade(stat(week, player, team, col), b["side"], float(b["line"]))
+            shown = f"your bet: {b.get('side', '?')[:1].upper()} {b.get('line', '?')}"
+            verdict = {"W": "won", "L": "lost", None: "no result yet"}[res]
+        notes.append(dict(kind=kind, player=player, col=col, shown=shown, verdict=verdict, res=res,
+                          group=group or "?", rank=rank, ant=ant, text=v[2:]))
+    out.append(f"\nYOUR WORDS ({len(notes)} notes):")
+    for n in notes:
+        tag = f"{n['group']}{' #' + n['rank'] if n['rank'] else ''}"
+        proj = f", projection {n['ant']}" if n["ant"] else ""
+        out.append(f"  {n['kind'].upper():4s} {n['player']} {n['col']} -- {n['shown']} ({tag}{proj}) -> {n['verdict']}")
+        out.append(f"       \"{n['text']}\"")
+    if not notes:
+        out.append("  none yet (the box in the Pass / Bet picker saves them)")
+    else:
+        by_theme = defaultdict(list)
+        for n in notes:
+            for t in themes_of(n["text"]):
+                by_theme[t].append(n)
+        out.append("\nBy theme in your words (passes: L = the board's side lost, so passing was right):")
+        for t, ns in sorted(by_theme.items(), key=lambda kv: -len(kv[1])):
+            ps = [x["res"] for x in ns if x["kind"] == "pass" and x["res"]]
+            bs = [x["res"] for x in ns if x["kind"] == "bet" and x["res"]]
+            bits = []
+            if ps:
+                bits.append(f"passes: board's side went {rec(ps)} -> right to pass {ps.count('L')} of {len(ps)}")
+            if bs:
+                bits.append(f"your bets: {rec(bs)}")
+            out.append(f"  {t:24s} {len(ns)} note(s)  " + ("; ".join(bits) or "no results yet"))
+        out.append("  (A theme needs several weeks of results before it becomes a rule.)")
     print("\n".join(out))
 
 

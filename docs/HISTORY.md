@@ -3655,3 +3655,12 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
 - **Not changed:** Top 3 ordering (light juice first), proj_over, track_record.json.
 - **Infrastructure:** the `lookback.yml` browser install got the same bounded/no-deps fallback as update.yml (it failed on the runner's DNS problem).
 
+## His own words on a pass or bet (2026-11-11)
+- Trevor: "can you also add the logic in where when I react to a bet I tell you in words why I didn't like it in the webpage and it can build that into the model".
+- **Built:** a text box in the Pass and Bet pickers, saved as `note|` with the board's context (`ctx|`). It syncs and rides in the My Bets backup.
+- **"Build into the model" means a weekly loop, not automatic learning.**
+  - `review_my_week.py` lists each note beside the result and tallies keyword themes.
+  - Rule candidates come only from reasons that keep being right across weeks. Passes with a saved line are graded against the board's side.
+- **Kept private:** notes are never printed in Actions logs or annotations (the repo is public).
+- **Not done:** the player-popup mark dropdown still doesn't open the picker (only the main board's does).
+
