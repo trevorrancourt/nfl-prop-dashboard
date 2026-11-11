@@ -3633,3 +3633,12 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
   - Bug from the Review-only change: `render()` set `show_best_book` to the bet's short label ('DK'), but the highlight compares book keys ('draftkings'), so Review rows lost the highlight.
   - Fixed by mapping the label through `BET_BOOKS`.
 
+## Refresh failing: phone-alert step blocked the site (2026-11-11)
+- Trevor: "Dashboard refresh failing". Two manual refreshes (13:57 and 14:13 UTC) failed; the site kept the last good build from 02:43 UTC.
+- **Cause:** `ubuntu-latest` is now Ubuntu 26.04. In the failed runs the "Phone alerts" step's `playwright install --with-deps chromium` could not resolve the Ubuntu package servers (52 "Temporary failure resolving" errors). It retried for 10 minutes and failed.
+  - The odds pull and the page build had worked (119 players with lines, 14 of 14 games). The deploy was skipped only because that one step failed.
+  - The install line was outside the `|| echo "alert failed (site still updates)"` net, so the "site still updates" promise did not hold for it.
+  - Runs on the same 26.04 image at 02:44 UTC had installed the browser fine, so the DNS trouble looked temporary.
+- **Fix:** the step now has `continue-on-error: true`, a timeout, a bounded install with a no-deps fallback, and a warning instead of a failure.
+  - Alerts can still be skipped when the runner has no network. The site now always publishes.
+

@@ -68,7 +68,14 @@ jobs:
 
       # Phone alerts: NTFY_TOPIC (owner) and/or everyone who saved a topic
       # under "Alerts" on the site (needs SUPABASE_SERVICE_KEY).
+      # 2026-11-11: this step must never block the site update. Two refreshes
+      # failed here when the runner couldn't resolve the Ubuntu package servers
+      # (the browser install sat outside the "|| echo" safety net, then the
+      # whole job failed and the deploy was skipped). Now: bounded install with
+      # a no-deps fallback, a step timeout, and continue-on-error.
       - name: Phone alerts
+        continue-on-error: true
+        timeout-minutes: 8
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -76,8 +83,10 @@ jobs:
           PAGE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: |
           if [ -n "$NTFY_TOPIC" ] || [ -n "$SUPABASE_SERVICE_KEY" ]; then
-            pip install playwright==1.47.0 && python -m playwright install --with-deps chromium
-            python scripts/notify.py site/index.html site/dashboard_mnf.html || echo "alert failed (site still updates)"
+            pip install playwright==1.47.0
+            (timeout 180 python -m playwright install --with-deps chromium || timeout 120 python -m playwright install chromium) \
+              && python scripts/notify.py site/index.html site/dashboard_mnf.html \
+              || echo "::warning title=Phone alerts::skipped -- the browser install or the alert step failed (the site still updates)"
           else
             echo "No NTFY_TOPIC or SUPABASE_SERVICE_KEY secret -- skipping."
           fi

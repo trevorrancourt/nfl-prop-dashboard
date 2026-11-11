@@ -42,6 +42,8 @@ The two boards link to each other.
 
 It only buzzes on a NEW pick or a watched move (any line change, or 10+ cents of price, measured from the last alert).
 
+**The alert step can't block the site** (2026-11-11, per Trevor: "Dashboard refresh failing"): two refreshes failed when the runner couldn't resolve the Ubuntu package servers during `playwright install --with-deps`, which sat outside the `|| echo` net, so the job failed and the deploy was skipped. The step now has `continue-on-error`, an 8-minute timeout, a bounded install with a no-deps fallback, and posts a "Phone alerts: skipped" warning instead of failing. If the site is stale and a run shows Phone alerts failed, check the job log (readable with `gh api repos/.../actions/jobs/<id>/logs`).
+
 **Per person:** anyone signed in can save their own ntfy topic under "🔔 Alerts" next to Sign out, stored in `public.alert_prefs`. Each person gets their own alert from their own marks, with per-user state in `data/last_alert.json` → `users`. Trevor's `NTFY_TOPIC` secret maps to the `ALERT_EMAIL` account. Accounts are read with the `SUPABASE_SERVICE_KEY` secret, which goes in Actions secrets only, never in the page; without it, only `NTFY_TOPIC` gets alerts, NEW section only. The `alert_prefs` SQL:
   ```sql
   create table public.alert_prefs (
