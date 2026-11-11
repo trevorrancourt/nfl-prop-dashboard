@@ -331,7 +331,7 @@ def main():
             out.append((r, b, ok))
         return out
     L.append("\nF. INSIDE THE GROUPS (record / ROI at the closing line):")
-    for g in ("proj_under", "must_market"):
+    for g in ("proj_under", "proj_over", "must_market", "target3"):
         xs = _graded(g)
         if not xs:
             continue
