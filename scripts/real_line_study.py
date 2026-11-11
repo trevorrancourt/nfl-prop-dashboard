@@ -46,10 +46,11 @@ BOOKS = ("draftkings", "fanduel", "betmgm")
 STUDY_JS = r"""(keys) => {
   const dc = {}; const out = [];
   const sw = seasonWeeks();
-  const tp = (typeof topPicks === 'function') ? topPicks() : { top: [], review: [] };
+  const tp = (typeof topPicks === 'function') ? topPicks() : { top: [], review: [], more: [] };
   const tier = {};
   tp.top.forEach(c => { tier[markKey(c.e)] = 'top'; });
   tp.review.forEach(c => { tier[markKey(c.e)] = 'review'; });
+  (tp.more || []).forEach(c => { tier[markKey(c.e)] = 'more'; });
   const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
   for (const r of ROWS) {
     if (r.vegas_line === null || r.vegas_line === undefined || !keys.includes(gameKey(r))) continue;
@@ -302,14 +303,20 @@ def main():
         roi = sum((dec(p) - 1) if ok else -1 for ok, p in pr) / len(pr) if pr else 0
         L.append(f"  {g:16s} {sum(w)}-{len(w) - sum(w)}  ({(sum(w) / len(w) if w else 0):.0%})  ROI {roi:+.0%}   line moved toward it {sum(toward)}/{len(toward)}")
     # The lists themselves, as the page builds them from this board (Top 3 / Review).
-    for t in ("top", "review"):
+    for t in ("top", "review", "more"):
         x = df[df.tier == t] if "tier" in df else df.iloc[0:0]
         pr = [((r.actual > r.bet["line"]) if r.bet["side"] == "over" else (r.actual < r.bet["line"]), r.bet["price"]) for r in x.itertuples()
               if isinstance(r.bet, dict) and r.bet.get("price") is not None and r.actual != r.bet["line"]]
         if pr:
             dec = lambda o: 1 + o / 100 if o > 0 else 1 + 100 / abs(o)
             wins = sum(ok for ok, _ in pr)
-            L.append(f"  LIST {'Top 3' if t == 'top' else 'Review'}: {wins}-{len(pr) - wins}  ROI {sum((dec(p) - 1) if ok else -1 for ok, p in pr) / len(pr):+.0%}")
+            L.append(f"  LIST {({'top': 'Best 3', 'review': 'Next 10', 'more': 'More 17'})[t]}: {wins}-{len(pr) - wins}  ROI {sum((dec(p) - 1) if ok else -1 for ok, p in pr) / len(pr):+.0%}")
+            if t == "more":
+                for sd in ("over", "under"):
+                    ps = [((r.actual > r.bet["line"]) if sd == "over" else (r.actual < r.bet["line"]), r.bet["price"]) for r in x.itertuples()
+                          if isinstance(r.bet, dict) and r.bet.get("side") == sd and r.bet.get("price") is not None and r.actual != r.bet["line"]]
+                    if ps:
+                        L.append(f"      more / {sd}: {sum(ok for ok, _ in ps)}-{len(ps) - sum(ok for ok, _ in ps)}  ROI {sum((dec(p) - 1) if ok else -1 for ok, p in ps) / len(ps):+.0%}")
 
     # F. Inside the two groups the lists are built from (2026-11-11, per Trevor:
     # "suggestions are all under and the top three are high odds"): by stat, by

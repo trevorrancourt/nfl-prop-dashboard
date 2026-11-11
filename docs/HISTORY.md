@@ -3664,3 +3664,21 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
 - **Kept private:** notes are never printed in Actions logs or annotations (the repo is public).
 - **Not done:** the player-popup mark dropdown still doesn't open the picker (only the main board's does).
 
+## Three tiers: Best 3, Next 10, More 17 (2026-11-11)
+- Trevor: "Again I don't get how there are so many unders", then "I don't want it to be so many under, that's less fun. What if we changed to 3 best bets, then ten best bets and then 17 that don't account for the under as hard".
+- **Why the list was Under-heavy** (explained to him first, nothing changed then):
+  - Across all props the Over hit only 47.7% over Weeks 4-9 (46.2% in Weeks 7-9), so lines run a bit high.
+  - The projection only held up in one direction: proj_under 165-111 (60%) vs proj_over 137-137 on Weeks 7-9.
+  - The 15 projection Unders were three bet types: 6 QB rush Unders, 4 RB rush Unders, 5 receptions Unders.
+  - Several shared a game (CIN 3; BUF, DAL, NE, WAS 2 each).
+  - He bet Overs 55 of 60 times.
+  - QB rush Unders on the Weeks 4-6 board: median line 27.5, median result 20, median projection 12.3.
+- **Built:** three tiers, read as 3 + 10 + 17 = 30 rows.
+  - Best 3 and Next 10 are the old evidence-based list, unchanged.
+  - More 17 alternates Over and Under: best Over first, then the best Under, and so on.
+  - Its Overs come from streak 3-stars and projection-over picks, at -130 or better, with a 10-yard minimum on yardage lines. Without that, the first test pulled Over 0.5 rush yds at +102 and Over 0.5 rec yds at +162.
+- **Honest label:** More's Overs are about 50-55% in tests, so it is lower confidence. The tag hover says so.
+- **Grading:** `lookback.py` and `real_line_study.py` now print Best / Next / More, and More by side.
+- **Notice:** the "Review list" build notice shows each tier's Over/Under split.
+- **Still open:** the Top 3 takes the lightest MUST BET prices first (the question from earlier today, unanswered).
+

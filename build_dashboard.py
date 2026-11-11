@@ -936,6 +936,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .cov-lowman {{ background: rgba(210,153,34,0.18); color:#e0b84a; }}
   .cov-review {{ background: rgba(191,133,255,0.18); color:#c893ff; margin-left:0; }}
   .pick-side {{ font-size:13px; margin-right:6px; }}
+  .cov-more {{ background: rgba(154,161,172,0.16); color: var(--muted); margin-left:0; }}
   .mustbet-tag {{ background: rgba(255,215,0,0.20); color:#ffd54a; margin-left:0; font-size:11px; letter-spacing:0.02em; }}
   .injury-tag {{ margin-left:5px; cursor: default; }}
   .injury-out {{ background: rgba(248,81,73,0.18); color:#ff8f89; }}
@@ -1002,8 +1003,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;">
       <input type="checkbox" id="hideMarkedX" checked> Hide &#10060; rows
     </label>
-    <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="Only show the &#128269; Review #1-#20 rows.">
-      <input type="checkbox" id="reviewOnlyFilter"> &#128269; Review picks only
+    <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="Only show the ranked picks (Best 3, Next 10, More 17).">
+      <input type="checkbox" id="reviewOnlyFilter"> &#128269; Best bets only
     </label>
     <button type="button" id="resetColsBtn" class="pos-btn" style="margin-left:16px;" title="Columns: drag a header to move it, drag the thin bar on a header's right edge to resize it. Your layout is saved in this browser. This puts every column back to its original spot and width.">&#8634; Reset columns</button>
     <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="Only show this week's &#129692; Ladder board players (the ones likeliest to go off -- see the Ladder board button).">
@@ -1046,7 +1047,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <th data-key="anticipated" title="Team Share % x Opp Allows -- a projection of this player's stat based on their typical share of team production against what the upcoming opponent allows to this position">Anticipated</th>
         <th data-key="edge" title="Recent Avg minus the most advantageous available line for whichever side (Over/Under) Recent Avg favors -- the lowest DK/FanDuel/BetMGM line for an Over, the highest for an Under. That book is highlighted in green below. Falls back to the consensus line if Recent Avg ties it exactly.">Edge</th>
         <th data-key="anc_edge" title="Anticipated minus that same shopped line -- Edge and Anc. Edge are graded against the same book/number, since they're two ways of sizing up one candidate bet.">Anc. Edge</th>
-        <th data-key="signal_rank" title="The 20 best bets on the board, ranked">&#128269; Review</th>
+        <th data-key="signal_rank" title="The best 3, then the next 10, then 17 more (Overs and Unders balanced), ranked">&#128269; Best bets</th>
         <th data-key="win_edge" class="win-col" title="Estimated chance to win the better side (O/U), then the break-even % its best price needs, then the edge (estimate minus break-even). Built from the market's juice-free odds, a projection model and his season hit rate. Hover a cell for the breakdown. Sort by this to see the best values first. An estimate, not proven yet.">Win % / Need / Edge</th>
         <th data-key="draftkings_line">DraftKings</th>
         <th data-key="fanduel_line">FanDuel</th>
@@ -4400,12 +4401,12 @@ function render() {{
       (!strongMatchupOnly || isStrongMatchup(r)) &&
       (!q || r.player.toLowerCase().includes(q) || r.team.toLowerCase().includes(q) || r.opponent.toLowerCase().includes(q))
     );
-  // Default sort: the Review #1..#20 picks first, in their order, so the
+  // Default sort: the picks (Best, Next, More) first, in their order, so the
   // top of the board IS the list of bets we think are good (2026-11-10).
   const pickOrder = {{}};
   if (sortKey === 'signal_rank') {{
     const tp = topPicks();
-    tp.top.concat(tp.review).forEach((c, i) => {{ pickOrder[markKey(c.e)] = i + 1; }});
+    tp.top.concat(tp.review, tp.more).forEach((c, i) => {{ pickOrder[markKey(c.e)] = i + 1; }});
   }}
   rows.sort((a, b) => {{
     const pa = pickOrder[markKey(a)] || Infinity, pb = pickOrder[markKey(b)] || Infinity;
@@ -5522,7 +5523,7 @@ function gameScript(key, weeksIn) {{
 // shows the Review list now).
 function gsBoardRows(key) {{
   const tp = topPicks();
-  return tp.top.concat(tp.review).filter(c => gameKey(c.e) === key).map(c => c.e);
+  return tp.top.concat(tp.review, tp.more).filter(c => gameKey(c.e) === key).map(c => c.e);
 }}
 function gsDirClass(d) {{ return d > 0 ? 'gs-good' : d < 0 ? 'gs-bad' : ''; }}
 function gsList(items) {{
@@ -5841,12 +5842,12 @@ function myRulesHtml() {{
   const li = s => `<li style="margin:3px 0;">${{s}}</li>`;
   const sec = (title, items) => `<h3 class="modal-section-title">${{title}}</h3><ul style="margin:4px 0 10px 18px; padding:0;">${{items.map(li).join('')}}</ul>`;
   return sec('The board (2026-11-10)', [
-      '<b>&#128269; Review #1-#' + LIST_SIZE + '</b> is the only pick label on the board now. The streak tiers below (&#128293;/&#129482;/&#11088;/&#128161;/&#10067;) still run underneath -- MUST BETs and &#127919; 3-stars feed the Review list -- but they are no longer shown. Flags on a Review pick: &#128197; the full season agrees with the bet, &#10004;/&#9888; script = the game script backs it / argues against it. Next to the player name: &#127919; outlier defense, &#11014; alt-line idea, &#129692; ladder board, &#129657; injuries.',
+      '<b>&#128269; Best bets</b> is the only pick label on the board now, in three tiers: <b>&#11088; Best 3</b> (gold; the strict MUST BET picks, one per game, and the only phone alerts), <b>&#128269; Next 10</b> (the next best from the pick types that held up in tests) and <b>&#10133; More 17</b> (Overs and Unders take turns so it is not all Unders; the Overs here come from pick types with little or no test edge, only at -130 or better, so treat this tier as lower confidence). The streak tiers below (&#128293;/&#129482;/&#11088;/&#128161;/&#10067;) still run underneath -- MUST BETs and &#127919; 3-stars feed the lists -- but they are no longer shown. Flags on a pick: &#128197; the full season agrees with the bet, &#10004;/&#9888; script = the game script backs it / argues against it. Next to the player name: &#127919; outlier defense, &#11014; alt-line idea, &#129692; ladder board, &#129657; injuries.',
     ]) + sec('Your reasons (2026-11-11)', [
       'When you mark a row &#10060; Pass or &#9989; Bet, a box opens: say why in your own words, tap a tag, or both. It is saved with your marks (synced to your account, included in the My Bets backup) together with what the board said at that moment. Each week you paste the backup to me: I grade every reason against what actually happened (would the board\u2019s side have won?) and turn the ones that keep being right into rules. Nothing changes the model by itself.',
     ]) + sec('The groups', [
       '<b>&#11088; MUST BET</b> -- a streak pick the books agree with: he and the defense have been on that side (any streak level), and the books charge extra juice on it, between ' + (MAX_JUICE_PRICE - 1) + ' and ' + MUST_JUICE_MIN + '. In the Weeks 4-9 study those went 65%, and made money up to -170 (not beyond). No role change or lead-back blowout. These are the Top 3 candidates and the phone alerts. A plain streak at a cheap price is only a 3-star (it went 36-29).',
-      '<b>🔍 Review #1-#' + LIST_SIZE + ' tags:</b> the ' + LIST_SIZE + ' best bets on the board, one ranked list, marked right on the board in the 🔍 Review column (hover for the bet, his projection, his last games and why). They come only from the groups that held up when tested on weeks they weren\u2019t built from: MUST BETs first, then 📏 projection-under picks (not TDs/INTs) and 🎯 3-stars -- best group first, and inside a group the strongest pick first (least juice / biggest gap between projection and line). The gold ones (#1-#3) are the best-priced MUST BETs, one per game, that clear the bar: those are the phone alerts. A row only makes the list if its price still leaves value. With the default sort, these rows sit at the top of the board in order.',
+      '<b>&#11088; / &#128269; / &#10133; tags:</b> the ' + LIST_SIZE + ' ranked picks, marked right on the board in the Best bets column (hover for the bet, his projection, his last games and why). Best 3 and Next 10 come only from the groups that held up when tested on weeks they weren\u2019t built from: MUST BETs first, then 📏 projection-under picks (Receptions and Rush Yds only, not TDs/INTs) and 🎯 3-stars -- best group first, and inside a group the strongest pick first (least juice / biggest gap between projection and line). More 17 alternates the best remaining Over and the best remaining Under; Overs there come from streak 3-stars, 🎯 3-stars and projection-over picks (about 50-55% in the tests), priced -130 or better. One pick per player. With the default sort, the picks sit at the top of the board in order.',
       '<b>📏 Projection gaps (Review list):</b> Anticipated 27%+ under the line -> Under, for Receptions and Rush Yds only (about 66% in the Weeks 4-9 tests; receiving-yard and Rush Attempts Unders were coin flips or worse, so they are out). Projection-OVER picks are not on the list: they went 50% on Weeks 7-9. A player appears once on the list.',
       '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
       '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
@@ -5924,8 +5925,25 @@ const TOP_GROUPS = ['must_market'];
 const REVIEW_GROUPS = ['must_market', 'proj_under', 'target3'];
 const TOP_MIN_P = 0.56;
 const TOP_MIN_VALUE = 0.02;
+// Three tiers (2026-11-11, per Trevor: "I don't want it to be so many under,
+// that's less fun. What if we changed to 3 best bets, then ten best bets and
+// then 17 that don't account for the under as hard"):
+//   Best  (TOP_SIZE 3)   -- the strict picks, unchanged; the only phone alerts.
+//   Next  (NEXT_SIZE 10) -- the next best from the groups that held up in tests.
+//   More  (MORE_SIZE 17) -- fills in with Overs and Unders taking turns (best
+//                           Over, best Under, ...) so it isn't all Unders. The
+//                           Overs here come from groups with little or no test
+//                           edge (streak 3-stars, projection-over, 🎯), and
+//                           only at -130 or better.
 const TOP_SIZE = 3;
-const LIST_SIZE = 20; // Top 3 + Review together
+const NEXT_SIZE = 10;
+const MORE_SIZE = 17;
+const LIST_SIZE = TOP_SIZE + NEXT_SIZE + MORE_SIZE; // 30 rows
+const MORE_EXTRA_GROUPS = ['streak3', 'proj_over'];
+// Yardage lines under this are lottery tickets (Over 0.5 rush yds), not picks:
+// the groups with no test edge need a real line to get into More.
+const MORE_MIN_YARD_LINE = 10;
+const YARD_STATS = new Set(['rushing_yards', 'receiving_yards', 'passing_yards']);
 const PICK_GROUPS = {{
   must_market: 'MUST BET: streak + the books agree (-131 to -170)',
   proj_under: 'Projection 27%+ under the line (Under)',
@@ -6007,18 +6025,19 @@ var _topCache = null;
 function topPicks() {{
   if (_topCache) return _topCache;
   const dc = {{}}, cands = [];
+  const POOL = REVIEW_GROUPS.concat(MORE_EXTRA_GROUPS);
   for (const r of ROWS) {{
     const e = enrichRow(r, selectedWeeks, dc);
     if (MARKS[markKey(e)] === 'pass') continue;
     const g = pickGroup(e);
-    if (!g || !REVIEW_GROUPS.includes(g)) continue;
+    if (!g || !POOL.includes(g)) continue;
     const bet = pickBet(e);
     if (!bet || bet.price === null || bet.price === undefined) continue;
     const rec = groupRecord(g);
     const need = impliedProb(bet.price);
     cands.push({{ e, g, bet, rec, p: rec.p, need, value: rec.p - need }});
   }}
-  // Top 3: MUST BETs, least juice first (best value).
+  // Best 3: MUST BETs, least juice first (best value).
   cands.sort((a, b) => (b.value - a.value) || (b.p - a.p));
   const top = [], games = new Set(), used = new Set(), who = new Set();
   const whoKey = c => c.e.player + '|' + c.e.team;
@@ -6027,22 +6046,40 @@ function topPicks() {{
     if (!TOP_GROUPS.includes(c.g) || c.p < TOP_MIN_P || c.value < TOP_MIN_VALUE || games.has(gameKey(c.e)) || who.has(whoKey(c))) continue;
     top.push(c); games.add(gameKey(c.e)); used.add(markKey(c.e)); who.add(whoKey(c));
   }}
-  // Review (2026-11-10, per Trevor: "shouldn't we have one thing of bets to
+  // Next 10 (2026-11-10, per Trevor: "shouldn't we have one thing of bets to
   // review that we actually think are good?"): the strongest groups first
   // (by graded record), and inside a group the strongest pick first --
   // MUST BETs by least juice, projection picks by how far the projection
   // is from the line -- instead of by price alone.
   const strength = c => c.g === 'must_market' ? -c.need
     : (c.e.anticipated && c.bet.line ? Math.abs(c.e.anticipated - c.bet.line) / c.bet.line : 0);
-  const reviewOrder = cands.slice().sort((a, b) => (b.p - a.p) || (strength(b) - strength(a)));
+  const ordered = cands.slice().sort((a, b) => (b.p - a.p) || (strength(b) - strength(a)));
   const review = [];
-  for (const c of reviewOrder) {{
-    if (top.length + review.length >= LIST_SIZE) break;
+  for (const c of ordered) {{
+    if (review.length >= NEXT_SIZE) break;
     // One pick per player (2026-11-11): the same player twice (Rec Yds + Receptions) is one bet's worth of information.
-    if (used.has(markKey(c.e)) || who.has(whoKey(c)) || c.value <= 0) continue;
+    if (!REVIEW_GROUPS.includes(c.g) || used.has(markKey(c.e)) || who.has(whoKey(c)) || c.value <= 0) continue;
     review.push(c); used.add(markKey(c.e)); who.add(whoKey(c));
   }}
-  return (_topCache = {{ top, review }});
+  // More 17: Overs and Unders take turns, best of each side first, so the
+  // tier isn't all Unders. Anything outside the MUST BET group has to be
+  // priced -130 or better.
+  const moreOk = c => !used.has(markKey(c.e)) && !who.has(whoKey(c)) && (c.g === 'must_market' || c.bet.price >= MAX_JUICE_PRICE)
+    && !(MORE_EXTRA_GROUPS.includes(c.g) && YARD_STATS.has(c.e.stat_col) && c.bet.line < MORE_MIN_YARD_LINE);
+  const sides = {{ over: ordered.filter(c => c.bet.side === 'over'), under: ordered.filter(c => c.bet.side === 'under') }};
+  const at = {{ over: 0, under: 0 }};
+  const more = [];
+  let turn = 'over';
+  while (more.length < MORE_SIZE && (at.over < sides.over.length || at.under < sides.under.length)) {{
+    const pool = sides[turn];
+    while (at[turn] < pool.length && !moreOk(pool[at[turn]])) at[turn]++;
+    if (at[turn] < pool.length) {{
+      const c = pool[at[turn]++];
+      more.push(c); used.add(markKey(c.e)); who.add(whoKey(c));
+    }}
+    turn = turn === 'over' ? 'under' : 'over';
+  }}
+  return (_topCache = {{ top, review, more }});
 }}
 const fmtPrice = v => (v > 0 ? '+' + v : String(v));
 function topRowHtml(c, n) {{
@@ -6065,26 +6102,31 @@ function renderTopPanel() {{
   const el = document.getElementById('topPanel');
   if (el) el.innerHTML = '';
 }}
-// Where a row sits in the 🔍 Review list: {{ c, n, alert }} or null.
+// Where a row sits in the pick list: {{ c, n, all, tier, alert }} or null.
+// tier 1 = Best 3, 2 = Next 10, 3 = More 17.
 function pickFor(r) {{
   const tp = topPicks();
-  const all = tp.top.concat(tp.review);
+  const all = tp.top.concat(tp.review, tp.more);
   const k = markKey(r);
   const n = all.findIndex(x => markKey(x.e) === k) + 1;
-  return n ? {{ c: all[n - 1], n, all, alert: n <= tp.top.length }} : null;
+  if (!n) return null;
+  const tier = n <= tp.top.length ? 1 : (n <= tp.top.length + tp.review.length ? 2 : 3);
+  return {{ c: all[n - 1], n, all, tier, alert: tier === 1 }};
 }}
-// A 🔍 Review #n tag in the Review column (one ranked list of LIST_SIZE,
-// 2026-11-10), with this pick's own details in the hover (the bet, his
-// projection, his last games, why). #1-#3 = the Top 3 (gold, phone alerts).
+const TIER_NAME = {{ 1: 'BEST 3', 2: 'NEXT 10', 3: 'MORE' }};
+// A ⭐ Best / 🔍 Next / ➕ More tag with the rank (one list of LIST_SIZE),
+// with this pick's own details in the hover (the bet, his projection, his
+// last games, why). Best 3 = gold and the phone alerts.
 function pickTag(r) {{
   const pf = pickFor(r);
   if (!pf) return '';
-  const {{ c, n, all, alert }} = pf, e = c.e, b = c.bet;
+  const {{ c, n, all, tier, alert }} = pf, e = c.e, b = c.bet;
   const r1 = v => Math.round(v * 10) / 10;
   const last = playerSelectedIndices(e, seasonWeeks()).slice(0, 4).map(i => r1(e.game_log[i]));
   const lines = [
-    `🔍 REVIEW #${{n}} of ${{all.length}}: ${{b.side === 'over' ? 'Over' : 'Under'}} ${{b.line}} ${{e.stat_label}} at ${{b.price > 0 ? '+' : ''}}${{b.price}} (${{b.book}})`,
+    `${{TIER_NAME[tier]}} #${{n}} of ${{all.length}}: ${{b.side === 'over' ? 'Over' : 'Under'}} ${{b.line}} ${{e.stat_label}} at ${{b.price > 0 ? '+' : ''}}${{b.price}} (${{b.book}})`,
     alert ? '📲 Also a phone alert: one of the best-priced MUST BETs (max one per game).' : null,
+    tier === 3 ? 'Lower confidence: this tier takes Overs and Unders in turns on purpose, so some of it has little test evidence behind it.' : null,
     e.anticipated !== null && e.anticipated !== undefined ? `Projects ${{r1(e.anticipated)}} vs the ${{b.line}} line` : null,
     last.length ? `Last ${{last.length}} games: ${{last.join(', ')}}` : null,
     e.must_why ? e.must_why.join('\\n') : null,
@@ -6093,7 +6135,9 @@ function pickTag(r) {{
   // The side at a glance, plain ▲ (Over) / ▼ (Under) after the tag -- no
   // highlight, no emoji, no word (2026-11-10, per Trevor).
   const sideMark = `<b class="pick-side" title="${{b.side === 'over' ? 'Over' : 'Under'}}">${{b.side === 'over' ? '&#9650;' : '&#9660;'}}</b>`;
-  return `<span style="white-space:nowrap;"><span class="cov-tag ${{alert ? 'mustbet-tag' : 'cov-review'}}" style="margin-right:4px;" title="${{escapeHtml(lines.join('\\n'))}}">&#128269; Review #${{n}}</span>${{sideMark}}</span>`;
+  const cls = tier === 1 ? 'mustbet-tag' : (tier === 2 ? 'cov-review' : 'cov-more');
+  const label = tier === 1 ? '&#11088; Best' : (tier === 2 ? '&#128269; Next' : '&#10133; More');
+  return `<span style="white-space:nowrap;"><span class="cov-tag ${{cls}}" style="margin-right:4px;" title="${{escapeHtml(lines.join('\\n'))}}">${{label}} #${{n}}</span>${{sideMark}}</span>`;
 }}
 // Extra flags on a Review pick (2026-11-10, per Trevor: "use the emojis
 // we've discussed for like extra flags like calendar and target"), judged on

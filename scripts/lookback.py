@@ -53,10 +53,11 @@ def kickoff_utc(g):
 
 EVAL_JS = r"""() => {
   const dc = {}; const out = [];
-  const tp = (typeof topPicks === 'function') ? topPicks() : { top: [], review: [] };
+  const tp = (typeof topPicks === 'function') ? topPicks() : { top: [], review: [], more: [] };
   const tier = {};
   tp.top.forEach(c => { tier[markKey(c.e)] = 'top'; });
   tp.review.forEach(c => { tier[markKey(c.e)] = 'review'; });
+  (tp.more || []).forEach(c => { tier[markKey(c.e)] = 'more'; });
   for (const r of ROWS) {
     const e = enrichRow(r, selectedWeeks, dc);
     const c = e.cons;
@@ -216,9 +217,13 @@ def main():
             tiers[r["tier"]].append(r)
     if tiers:
         lines.append("\nTop 3 / Review lists (graded on their own bet):")
-        for t in ("top", "review"):
+        for t in ("top", "review", "more"):
             rs = tiers.get(t, [])
-            lines.append(f"  {'⭐ Top 3' if t == 'top' else '🔍 Review':10s} {len(rs):3d}  {rec([r['gres'] for r in rs])}")
+            lines.append(f"  {({'top': '⭐ Best 3', 'review': '🔍 Next 10', 'more': '➕ More 17'})[t]:11s} {len(rs):3d}  {rec([r['gres'] for r in rs])}")
+            if t == "more" and rs:
+                for sd in ("over", "under"):
+                    ss = [r['gres'] for r in rs if r['bet']['side'] == sd]
+                    lines.append(f"      {sd:5s} {len(ss):3d}  {rec(ss)}")
             if t == "top":
                 for r in rs:
                     lines.append(f"    {r['gres']} {r['player']} {r['label']} {r['bet']['side'][0].upper()}{r['bet']['line']} ({r['bet']['price']}) -> {r['actual']:g}  [{r['grp']}]")
