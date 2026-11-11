@@ -311,6 +311,52 @@ def main():
             wins = sum(ok for ok, _ in pr)
             L.append(f"  LIST {'Top 3' if t == 'top' else 'Review'}: {wins}-{len(pr) - wins}  ROI {sum((dec(p) - 1) if ok else -1 for ok, p in pr) / len(pr):+.0%}")
 
+    # F. Inside the two groups the lists are built from (2026-11-11, per Trevor:
+    # "suggestions are all under and the top three are high odds"): by stat, by
+    # line size, by price, by week, and how many picks are the same player twice.
+    dec = lambda o: 1 + o / 100 if o > 0 else 1 + 100 / abs(o)
+    def _sum(items):
+        n = len(items)
+        if not n:
+            return "none"
+        w = sum(1 for ok, _ in items if ok)
+        return f"{w}-{n - w} ({w / n:.0%}, ROI {sum((dec(pc) - 1) if ok else -1 for ok, pc in items) / n:+.0%})"
+    def _graded(g):
+        out = []
+        for r in df[df.grp == g].itertuples():
+            b = r.bet
+            if not isinstance(b, dict) or b.get("price") is None or r.actual == b["line"]:
+                continue
+            ok = (r.actual > b["line"]) if b["side"] == "over" else (r.actual < b["line"])
+            out.append((r, b, ok))
+        return out
+    L.append("\nF. INSIDE THE GROUPS (record / ROI at the closing line):")
+    for g in ("proj_under", "must_market"):
+        xs = _graded(g)
+        if not xs:
+            continue
+        L.append(f"  {g}: {_sum([(ok, b['price']) for _, b, ok in xs])}")
+        for side in ("over", "under"):
+            L.append(f"    side {side}: {_sum([(ok, b['price']) for _, b, ok in xs if b['side'] == side])}")
+        stats = sorted({r.stat for r, _, _ in xs})
+        L.append("    by stat: " + "; ".join(f"{st} {_sum([(ok, b['price']) for r, b, ok in xs if r.stat == st])}" for st in stats))
+        yd = [(r, b, ok) for r, b, ok in xs if r.stat in ("rushing_yards", "receiving_yards")]
+        L.append("    yard props by line size: " + "; ".join(
+            f"{lo}-{hi} {_sum([(ok, b['price']) for r, b, ok in yd if lo <= b['line'] < hi])}" for lo, hi in ((0, 20), (20, 40), (40, 70), (70, 999))))
+        L.append("    by price: " + "; ".join(
+            f"{lo}..{hi} {_sum([(ok, b['price']) for r, b, ok in xs if lo <= b['price'] < hi])}" for lo, hi in ((-999, -150), (-150, -125), (-125, -112), (-112, 999))))
+        L.append("    by week: " + "; ".join(f"wk{w} {_sum([(ok, b['price']) for r, b, ok in xs if r.week == w])}" for w in sorted({r.week for r, _, _ in xs})))
+        seen = {}
+        for r, b, ok in xs:
+            seen.setdefault((r.player, r.week), []).append((r, b, ok))
+        dups = [v for v in seen.values() if len(v) > 1]
+        L.append(f"    same player twice in a week: {len(dups)} of {len(seen)} players ({sum(len(v) for v in dups)} of {len(xs)} picks); of those both won {sum(1 for v in dups if all(o for *_, o in v))}, both lost {sum(1 for v in dups if not any(o for *_, o in v))}")
+        best = []
+        for v in seen.values():
+            strength = lambda t: abs((t[0].ant or 0) - t[1]["line"]) / t[1]["line"] if t[1]["line"] else 0
+            best.append(max(v, key=strength))
+        L.append(f"    one pick per player-week (strongest kept): {_sum([(ok, b['price']) for _, b, ok in best])}")
+
     text = "\n".join(L)
     print(text)
     if os.environ.get("GITHUB_ACTIONS"):
