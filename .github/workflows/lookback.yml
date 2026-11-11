@@ -33,7 +33,12 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - run: pip install -r requirements.txt playwright==1.47.0 && python -m playwright install --with-deps chromium
+      # 2026-11-11: the --with-deps step runs apt, and the runner sometimes can't
+      # resolve the Ubuntu package servers (it failed this study run and two
+      # refreshes). Bounded tries, with a no-deps fallback.
+      - run: |
+          pip install -r requirements.txt playwright==1.47.0
+          timeout 180 python -m playwright install --with-deps chromium || timeout 120 python -m playwright install chromium
 
       - name: Build the current page code (no odds pulled)
         run: python run.py --skip-odds --skip-weather --skip-coverage
