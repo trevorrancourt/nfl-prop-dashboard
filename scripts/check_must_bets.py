@@ -41,7 +41,19 @@ JS = r"""
     reviewList: (typeof topPicks === 'function') ? (() => {
       const tp = topPicks();
       const inGroup = rows.filter(x => REVIEW_GROUPS.includes(pickGroup(x)) && pickBet(x) && pickBet(x).price != null).length;
-      return { shown: tp.top.length + tp.review.length, top: tp.top.length, inGroup, size: (typeof LIST_SIZE !== 'undefined' ? LIST_SIZE : null) };
+      // 2026-11-11 (per Trevor: "suggestions are all under and the top three are high odds"):
+      // list the picks themselves, and count every candidate by group and side.
+      const fp = v => v === null || v === undefined ? '' : (v > 0 ? '+' + v : String(v));
+      const items = tp.top.concat(tp.review).map((c, i) =>
+        `#${i + 1} ${c.e.player} ${c.e.team} ${c.e.stat_label} ${c.bet.side === 'over' ? 'O' : 'U'} ${c.bet.line} ${fp(c.bet.price)} ${c.bet.book || ''} [${c.g} p${Math.round(c.p * 100)} need${Math.round(c.need * 100)}]`);
+      const tally = {};
+      for (const x of rows) {
+        const g = pickGroup(x), b = g ? pickBet(x) : null;
+        if (!g || !b || b.price == null) continue;
+        const k = g + ' ' + (b.side === 'over' ? 'O' : 'U');
+        tally[k] = (tally[k] || 0) + 1;
+      }
+      return { shown: tp.top.length + tp.review.length, top: tp.top.length, inGroup, size: (typeof LIST_SIZE !== 'undefined' ? LIST_SIZE : null), items, tally };
     })() : null,
     picks: pick.map(x => {
       // 🎯 3-stars (2026-11-03) aren't streak picks: use their own side/line/price.

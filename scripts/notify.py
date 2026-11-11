@@ -286,6 +286,9 @@ def main():
             print(f"::notice title=Review list ({Path(html).name})::{rl['shown']} of {rl['size']} shown "
                   f"({rl['top']} phone-alert picks); {rl['inGroup']} rows in the Review groups had a price; "
                   f"{res['linesPosted']} props with lines on the board")
+            body = ("Candidates by group/side: " + ", ".join(f"{k} {v}" for k, v in sorted(rl.get("tally", {}).items()))
+                    + "\n" + "\n".join(rl.get("items", [])))
+            print(f"::notice title=Review picks ({Path(html).name})::" + body.replace("%", "%25").replace("\n", "%0A"))
         for w in res.get("watched", []):
             watched[w["key"]] = w
 
