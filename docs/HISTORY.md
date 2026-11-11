@@ -3642,3 +3642,16 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
 - **Fix:** the step now has `continue-on-error: true`, a timeout, a bounded install with a no-deps fallback, and a warning instead of a failure.
   - Alerts can still be skipped when the runner has no network. The site now always publishes.
 
+## "Suggestions are all under and the top three are high odds" (2026-11-11)
+- Trevor: "Something must be wrong with how we changed things this week. The suggestions are all under and the top three are high odds".
+- **What the board had** (new per-build notice "Review picks"): only 4 MUST BET candidates (2 Over, 2 Under), 54 proj_under and 39 proj_over candidates (proj_over isn't on the list), so #5-#20 were all proj_under. The Top 3 were the lightest-priced MUST BETs: Coker Rec U 4.5 -135, Love INT O 0.5 -138, Warren Rush Att O 12.5 -140. Same player twice: Wilson, Kiner, TeSlaa.
+- **Nothing was broken.** The grading doesn't count a player who didn't play as an Under win (no stat row → dropped).
+- **Study section F** (`real_line_study.py`; run on Weeks 4-6 locally and 7-9 on Actions) shows what is inside the groups:
+  - proj_under, by stat (Wks 4-6, then 7-9): receptions 45-25, 61-31; rush yds 33-18, 36-15; receiving yds 43-41, 54-53; carries 4-6, 5-9.
+  - proj_over 7-9: 137-137 (50%, ROI -6%); its Wks 4-6 receptions slice (31-15) fell to 32-35.
+  - must_market by price: -131..-150 is 18-11 then 17-13 (about break-even); -150..-170 is 11-4 then 9-1. Over 10-7, Under 16-7 in 7-9. Weekly: 11-3, 3-8, 12-3.
+  - The line-size slices flipped between windows (0-20 yd: 60% then 48%), so they were left out.
+- **Changed:** `proj_under` is Receptions + Rush Yds only; one pick per player on the list.
+- **Not changed:** Top 3 ordering (light juice first), proj_over, track_record.json.
+- **Infrastructure:** the `lookback.yml` browser install got the same bounded/no-deps fallback as update.yml (it failed on the runner's DNS problem).
+

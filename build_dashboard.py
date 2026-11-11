@@ -5791,7 +5791,7 @@ function myRulesHtml() {{
     ]) + sec('The groups', [
       '<b>&#11088; MUST BET</b> -- a streak pick the books agree with: he and the defense have been on that side (any streak level), and the books charge extra juice on it, between ' + (MAX_JUICE_PRICE - 1) + ' and ' + MUST_JUICE_MIN + '. In the Weeks 4-9 study those went 65%, and made money up to -170 (not beyond). No role change or lead-back blowout. These are the Top 3 candidates and the phone alerts. A plain streak at a cheap price is only a 3-star (it went 36-29).',
       '<b>🔍 Review #1-#' + LIST_SIZE + ' tags:</b> the ' + LIST_SIZE + ' best bets on the board, one ranked list, marked right on the board in the 🔍 Review column (hover for the bet, his projection, his last games and why). They come only from the groups that held up when tested on weeks they weren\u2019t built from: MUST BETs first, then 📏 projection-under picks (not TDs/INTs) and 🎯 3-stars -- best group first, and inside a group the strongest pick first (least juice / biggest gap between projection and line). The gold ones (#1-#3) are the best-priced MUST BETs, one per game, that clear the bar: those are the phone alerts. A row only makes the list if its price still leaves value. With the default sort, these rows sit at the top of the board in order.',
-      '<b>📏 Projection gaps (Review list):</b> Anticipated 27%+ under the line -> Under (about 57%), 50%+ over -> Over (about 55%); the one number that leaned the same way in both halves of the study.',
+      '<b>📏 Projection gaps (Review list):</b> Anticipated 27%+ under the line -> Under, for Receptions and Rush Yds only (about 66% in the Weeks 4-9 tests; receiving-yard and Rush Attempts Unders were coin flips or worse, so they are out). Projection-OVER picks are not on the list: they went 50% on Weeks 7-9. A player appears once on the list.',
       '<b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b> -- review it. He cleared it every game, the defense allowed it ' + Math.round(CONS_TIERS[1] * 100) + '%+ of the time, top-' + MUST_BET_MATCHUP_TOP + ' matchup.',
       '<b>&#128161;</b> -- worth a closer look: would have been a 2-star (defense ' + Math.round(CONS_TIERS[0] * 100) + '%+), the 🎬 game script backs it, it faces a 🎯 outlier defense on its side, or a backup RB with blowout upside.',
       '<b>Win % / Need / Edge (hidden since Nov 9 -- in the Weeks 4-9 study it didn\u2019t predict results at real lines):</b> an estimated chance to win the better side: starts from the books\u2019 odds with the juice removed, moves part of the way toward a projection model (Poisson for catches/TDs, normal for attempts/carries, a skewed curve for yards) and his season hit rate at that line -- how much each counts per stat was tuned on 66,000 games from 2019-2025 (e.g. QB passing leans on the projection, receiving on the hit rate). In that test, its 57% calls won 57% and its 64% calls won 66%. Need = the break-even % of the best price; Edge = the difference: green +' + WIN_EDGE_GOOD * 100 + ' to +' + WIN_EDGE_CHECK * 100 + ' (if you like it, go), amber \u26a0 over +' + WIN_EDGE_CHECK * 100 + ' (check news first), gray 0 to +' + WIN_EDGE_GOOD * 100 + ', red negative. Context only -- it doesn\u2019t change picks or alerts, and it isn\u2019t proven yet.',
@@ -5910,11 +5910,18 @@ function pickGroup(e) {{
 const PROJ_UNDER_RATIO = 0.73;
 const PROJ_OVER_RATIO = 1.5;
 const PROJ_SKIP_STATS = new Set(['total_tds', 'passing_tds', 'passing_interceptions']);
+// Which stats may be a "projection under" pick (2026-11-11, per Trevor:
+// "something must be wrong ... the suggestions are all under"). Checked in
+// two separate windows at the real closing lines: Receptions Unders went
+// 45-25 (Wks 4-6) and 61-31 (Wks 7-9); Rush Yds Unders 33-18 and 36-15.
+// Receiving-yard Unders were a coin flip both times (43-41, 54-53) and Rush
+// Attempts Unders lost (4-6, 5-9), so those two no longer qualify.
+const PROJ_UNDER_STATS = new Set(['receptions', 'rushing_yards']);
 function projGap(e) {{
   if (PROJ_SKIP_STATS.has(e.stat_col)) return null;
   const line = e.vegas_line;
   if (e.anticipated === null || e.anticipated === undefined || line === null || line === undefined || line <= 0) return null;
-  if (e.anticipated <= PROJ_UNDER_RATIO * line) return {{ group: 'proj_under', side: 'under' }};
+  if (e.anticipated <= PROJ_UNDER_RATIO * line) return PROJ_UNDER_STATS.has(e.stat_col) ? {{ group: 'proj_under', side: 'under' }} : null;
   if (e.anticipated >= PROJ_OVER_RATIO * line) return {{ group: 'proj_over', side: 'over' }};
   return null;
 }}
@@ -5957,11 +5964,12 @@ function topPicks() {{
   }}
   // Top 3: MUST BETs, least juice first (best value).
   cands.sort((a, b) => (b.value - a.value) || (b.p - a.p));
-  const top = [], games = new Set(), used = new Set();
+  const top = [], games = new Set(), used = new Set(), who = new Set();
+  const whoKey = c => c.e.player + '|' + c.e.team;
   for (const c of cands) {{
     if (top.length >= TOP_SIZE) break;
-    if (!TOP_GROUPS.includes(c.g) || c.p < TOP_MIN_P || c.value < TOP_MIN_VALUE || games.has(gameKey(c.e))) continue;
-    top.push(c); games.add(gameKey(c.e)); used.add(markKey(c.e));
+    if (!TOP_GROUPS.includes(c.g) || c.p < TOP_MIN_P || c.value < TOP_MIN_VALUE || games.has(gameKey(c.e)) || who.has(whoKey(c))) continue;
+    top.push(c); games.add(gameKey(c.e)); used.add(markKey(c.e)); who.add(whoKey(c));
   }}
   // Review (2026-11-10, per Trevor: "shouldn't we have one thing of bets to
   // review that we actually think are good?"): the strongest groups first
@@ -5974,8 +5982,9 @@ function topPicks() {{
   const review = [];
   for (const c of reviewOrder) {{
     if (top.length + review.length >= LIST_SIZE) break;
-    if (used.has(markKey(c.e)) || c.value <= 0) continue;
-    review.push(c); used.add(markKey(c.e));
+    // One pick per player (2026-11-11): the same player twice (Rec Yds + Receptions) is one bet's worth of information.
+    if (used.has(markKey(c.e)) || who.has(whoKey(c)) || c.value <= 0) continue;
+    review.push(c); used.add(markKey(c.e)); who.add(whoKey(c));
   }}
   return (_topCache = {{ top, review }});
 }}
