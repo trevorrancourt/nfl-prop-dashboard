@@ -937,6 +937,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .cov-review {{ background: rgba(191,133,255,0.18); color:#c893ff; margin-left:0; }}
   .pick-side {{ font-size:13px; margin-right:6px; }}
   .cov-more {{ background: rgba(154,161,172,0.16); color: var(--muted); margin-left:0; }}
+  .cov-look {{ background: rgba(210,153,34,0.18); color: var(--amber); margin-left:0; }}
   .mustbet-tag {{ background: rgba(255,215,0,0.20); color:#ffd54a; margin-left:0; font-size:11px; letter-spacing:0.02em; }}
   .injury-tag {{ margin-left:5px; cursor: default; }}
   .injury-out {{ background: rgba(248,81,73,0.18); color:#ff8f89; }}
@@ -4375,7 +4376,7 @@ function render() {{
 
   const q = document.getElementById('search').value.toLowerCase();
   const defCache = {{}}; // one lookup per (position, stat) pair per render, not per row
-  let rows = ROWS
+  const enriched = ROWS
     .map(r => {{
       const e = enrichRow(r, selectedWeeks, defCache);
       // Mark column sort (added 2026-09-29): ✅ bets on top, then 🌕, unmarked, ❌.
@@ -4388,13 +4389,25 @@ function render() {{
         Object.assign(e, {{ show_side: pf.c.bet.side, show_best_book: bk, show_best_line: pf.c.bet.line }});
       }}
       return e;
-    }})
+    }});
+  // 👀 Look flags apply only while one game is selected; their book cells show the flagged side.
+  _gameLooks = new Map();
+  if (activeGame !== 'ALL') {{
+    _gameLooks = computeGameLooks(enriched.filter(e => gameKey(e) === activeGame));
+    for (const e of enriched) {{
+      const l = _gameLooks.get(markKey(e));
+      if (!l || !l.bet) continue;
+      const bk = (BET_BOOKS.find(([k, label]) => label === l.bet.book) || [])[0] || null;
+      Object.assign(e, {{ show_side: l.bet.side, show_best_book: bk, show_best_line: l.bet.line }});
+    }}
+  }}
+  let rows = enriched
     .filter(r =>
       (activePos === 'ALL' || r.position === activePos) &&
       (activeStat === 'ALL' || r.stat_label === activeStat) &&
       (activeGame === 'ALL' || gameKey(r) === activeGame) &&
       (!hideMarkedX || MARKS[markKey(r)] !== 'pass') &&
-      (!reviewOnly || altOnly || pickFor(r)) && // 🔍 Review picks only (the Alt lines box overrides it)
+      (!reviewOnly || altOnly || pickFor(r) || lookFor(r)) && // Best bets only (the Alt lines box overrides it; 👀 flags stay while a game is selected)
       (!altOnly || r.alt_line) &&
       (!ladderOnly || ladderPick(r) !== null) &&
       (!weakMatchupOnly || isWeakMatchup(r)) &&
@@ -4407,6 +4420,7 @@ function render() {{
   if (sortKey === 'signal_rank') {{
     const tp = topPicks();
     tp.top.concat(tp.review, tp.more).forEach((c, i) => {{ pickOrder[markKey(c.e)] = i + 1; }});
+    _gameLooks.forEach((l, k) => {{ pickOrder[k] = 1000 + l.rank; }}); // 👀 flags right after the ranked picks
   }}
   rows.sort((a, b) => {{
     const pa = pickOrder[markKey(a)] || Infinity, pb = pickOrder[markKey(b)] || Infinity;
@@ -4451,7 +4465,7 @@ function render() {{
       <td>${{fmt(r.anticipated)}}</td>
       <td class="${{edgeClass(r.edge_pct)}}">${{fmt(r.edge)}}</td>
       <td class="${{edgeClass(r.anc_edge_pct)}}">${{fmt(r.anc_edge)}}</td>
-      <td>${{pickTag(r)}}${{pickFlags(r)}}</td>
+      <td>${{pickTag(r)}}${{pickFlags(r)}}${{lookTag(r)}}</td>
       <td class="win-col">${{winCellHtml(r)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.draftkings_line, bookCellPrice(r, 'draftkings'), r.show_side || r.direction)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.fanduel_line, bookCellPrice(r, 'fanduel'), r.show_side || r.direction)}}</td>
@@ -4599,7 +4613,7 @@ function openPlayerModal(playerName) {{
       <td>${{fmt(r.anticipated)}}</td>
       <td class="${{edgeClass(r.edge_pct)}}">${{fmt(r.edge)}}</td>
       <td class="${{edgeClass(r.anc_edge_pct)}}">${{fmt(r.anc_edge)}}</td>
-      <td>${{pickTag(r)}}${{pickFlags(r)}}</td>
+      <td>${{pickTag(r)}}${{pickFlags(r)}}${{lookTag(r)}}</td>
       <td class="win-col">${{winCellHtml(r)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.draftkings_line, bookCellPrice(r, 'draftkings'), r.show_side || r.direction)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.fanduel_line, bookCellPrice(r, 'fanduel'), r.show_side || r.direction)}}</td>
@@ -5843,6 +5857,8 @@ function myRulesHtml() {{
   const sec = (title, items) => `<h3 class="modal-section-title">${{title}}</h3><ul style="margin:4px 0 10px 18px; padding:0;">${{items.map(li).join('')}}</ul>`;
   return sec('The board (2026-11-10)', [
       '<b>&#128269; Best bets</b> is the only pick label on the board now, in three tiers: <b>&#11088; Best 3</b> (gold; the strict MUST BET picks, one per game, and the only phone alerts), <b>&#128269; Next 10</b> (the next best from the pick types that held up in tests) and <b>&#10133; More 17</b> (Overs and Unders take turns so it is not all Unders; the Overs here come from pick types with little or no test edge, only at -130 or better, so treat this tier as lower confidence). The streak tiers below (&#128293;/&#129482;/&#11088;/&#128161;/&#10067;) still run underneath -- MUST BETs and &#127919; 3-stars feed the lists -- but they are no longer shown. Flags on a pick: &#128197; the full season agrees with the bet, &#10004;/&#9888; script = the game script backs it / argues against it. Next to the player name: &#127919; outlier defense, &#11014; alt-line idea, &#129692; ladder board, &#129657; injuries.',
+    ]) + sec('&#128064; Look flags (2026-11-12)', [
+      'When you filter to ONE game, lines that are not in the ranked picks but have a reason to be checked get a <b>&#128064; Look</b> flag (with &#9650;/&#9660; for the side it points to), listed right after that game\u2019s ranked picks. It needs at least one strong reason: a &#127919; outlier defense, the &#129692; ladder board, a &#11014; alt-line idea, a key injury that helps or hurts him, a streak 3-star that did not rank, or a strong streak the board blocked (role change, blowout rule, matchup history). Game script, full-season agreement and &#128161; only add weight. At most 6 per game, one per player, priced -170 or better. Hover for the reasons, including any that pull the other way. These flags have no track record: they are angles to check against the news and your own read, they never buzz your phone, and they are not picks.',
     ]) + sec('Your reasons (2026-11-11)', [
       'When you mark a row &#10060; Pass or &#9989; Bet, a box opens: say why in your own words, tap a tag, or both. It is saved with your marks (synced to your account, included in the My Bets backup) together with what the board said at that moment. Each week you paste the backup to me: I grade every reason against what actually happened (would the board\u2019s side have won?) and turn the ones that keep being right into rules. Nothing changes the model by itself.',
     ]) + sec('The groups', [
@@ -6167,6 +6183,103 @@ function pickFlags(r) {{
       : ` <span class="cov-tag tb-script-bad" title="${{escapeHtml('Game script argues against the ' + side + ': ' + t.script.text)}}">&#9888; script</span>`;
   }}
   return out;
+}}
+// ---- 👀 Look flags for one game (2026-11-12, per Trevor: "when i filter by
+// specific games, it adds a flag to a line i should look to ... not flagged as
+// an overall bet, but when i analyze that game i should look at that").
+// Only while the Game filter is on one game. Lines that did NOT make the
+// ranked picks but have a reason to be checked: a 🎯 outlier defense, the 🪜
+// ladder board, a ⬆ alt-line idea, a strong injury that helps or hurts him, a
+// streak 3-star that isn't ranked, game script / full-year agreement, and
+// strong streaks the board blocked (role change, blowout, matchup history).
+// Each reason has a weight; a line needs a total of GAME_LOOK_MIN on one
+// side including at least one strong reason, and a price no worse than
+// MUST_JUICE_MIN; the best GAME_LOOK_MAX per game (one per player) are flagged. No
+// track record behind these -- context only, never alerted or ranked.
+var _gameLooks = new Map();
+const GAME_LOOK_MAX = 6;
+const GAME_LOOK_MIN = 2;
+function lookReasons(e) {{
+  const out = [];
+  const add = (kind, side, w, text) => out.push({{ kind, side, w, text }});
+  const lb = e.lookback || {{}};
+  const o = e.outlier_def;
+  if (o) add('outlier', o.side, 2, `🎯 ${{o.text}}${{e.outlier_value ? ' -- ' + e.outlier_value : ''}}`);
+  const lp = ladderPick(e);
+  if (lp) add('ladder', 'over', 2, `🪜 Ladder board: ${{Math.round(lp.info.goff * 100)}}% chance to reach ${{lp.info.target}}+ (line ${{lp.info.line}})`);
+  if (e.alt_line) add('alt', 'over', 1.5, `⬆ Projects ${{e.alt_line.proj}}; he cleared Over ${{e.alt_line.line}} in ${{e.alt_line.hits}} of ${{e.alt_line.n}} games (alt-line idea)`);
+  const imp = e.injury_impacts;
+  if (imp) {{
+    const strong = a => (a || []).filter(x => x.severity >= 3);
+    const h = strong(imp.helps), u = strong(imp.hurts);
+    if (h.length) add('injury_help', 'over', 1.5, '🩹▲ ' + impactItemText(h[0]) + (h.length > 1 ? ` (+${{h.length - 1}} more)` : ''));
+    if (u.length) add('injury_hurt', 'under', 1.5, '🩹▼ ' + impactItemText(u[0]) + (u.length > 1 ? ` (+${{u.length - 1}} more)` : ''));
+  }}
+  const lvl = Math.max(e.hot_level || 0, e.cold_level || 0);
+  if (lvl >= 3 && e.cons) {{
+    const sd = e.hot_level ? 'over' : 'under';
+    add('streak3', sd, 2, `Streak 3-star: he cleared the ${{sd}} ${{e.cons.line}} in ${{e.cons.pHits}}/${{e.cons.pGames}} games; ${{e.opponent}} allowed it in ${{e.cons.dHits}}/${{e.cons.dGames}}`);
+  }}
+  if (e.idea_reason) add('idea', e.cons ? e.cons.side : null, 1, '💡 ' + e.idea_reason);
+  const t = e.tiebreak;
+  if (t && t.script && t.script.effect > 0) add('script', t.lean, 1, `✔ Game script supports the ${{t.lean}}: ${{t.script.text}}`);
+  if (e.full_year && e.full_year.ok) add('fullyear', e.full_year.side, 1, '📅 The full season agrees too');
+  // Strong streaks the board blocked: not picks, but worth a look in the game.
+  if (e.cons && (lb.raw || 0) >= 3) {{
+    const sd = e.cons.side;
+    if (lb.role) add('blocked_role', sd, 2, `Role change: the streak points ${{sd}}, but the board won't pick it -- ${{(e.role_changes || [])[0] || 'check the news'}}`);
+    else if (lb.blowout) add('blocked_blowout', sd, 1.5, e.review_reason || 'The blowout rule kept this off the picks');
+    else if (lb.mismatch) add('blocked_mismatch', sd, 1.5, e.review_reason || 'The matchup history disagrees with the streak');
+  }}
+  return out;
+}}
+// list = enriched rows of ONE game. Returns Map(markKey -> look).
+function computeGameLooks(list) {{
+  const rankedPlayers = new Set(), cands = [];
+  for (const e of list) {{
+    if (MARKS[markKey(e)] === 'pass' || e.vegas_line === null || e.vegas_line === undefined) continue;
+    if (pickFor(e)) {{ rankedPlayers.add(e.player + '|' + e.team); continue; }}
+    const rs = lookReasons(e);
+    if (!rs.length) continue;
+    const sum = {{ over: 0, under: 0 }};
+    rs.forEach(x => {{ if (x.side) sum[x.side] += x.w; else {{ sum.over += x.w; sum.under += x.w; }} }});
+    const side = sum.over > sum.under ? 'over' : (sum.under > sum.over ? 'under' : null);
+    const score = Math.max(sum.over, sum.under);
+    // Needs one strong reason (weight 1.5+), not just two weak ones (a 💡 plus a 📅).
+    if (score < GAME_LOOK_MIN || !rs.some(x => x.w >= 1.5)) continue;
+    const m = side ? bestMarketFor(e, side) : null;
+    if (m && m.price < MUST_JUICE_MIN) continue; // a -205 price isn't worth flagging
+    cands.push({{
+      e, side, score,
+      why: rs.filter(x => !x.side || !side || x.side === side),
+      against: side ? rs.filter(x => x.side && x.side !== side) : [],
+      bet: m ? {{ side, line: m.line, price: m.price, book: m.book }} : null,
+    }});
+  }}
+  cands.sort((a, b) => (b.score - a.score) || (b.why.length - a.why.length));
+  const out = new Map(), who = new Set();
+  for (const c of cands) {{
+    if (out.size >= GAME_LOOK_MAX) break;
+    const w = c.e.player + '|' + c.e.team;
+    if (who.has(w) || rankedPlayers.has(w)) continue;
+    who.add(w);
+    out.set(markKey(c.e), {{ side: c.side, score: c.score, why: c.why, against: c.against, bet: c.bet, rank: out.size + 1 }});
+  }}
+  return out;
+}}
+function lookFor(r) {{ return _gameLooks.get(markKey(r)) || null; }}
+function lookTag(r) {{
+  const l = lookFor(r);
+  if (!l) return '';
+  const b = l.bet;
+  const lines = [
+    '👀 WORTH A LOOK in this game' + (b ? `: ${{b.side === 'over' ? 'Over' : 'Under'}} ${{b.line}} ${{r.stat_label}} at ${{b.price > 0 ? '+' : ''}}${{b.price}} (${{b.book}})` : ''),
+    'Not an overall pick -- this flag only shows while you filter to one game.',
+  ].concat(l.why.map(x => '- ' + x.text));
+  if (l.against.length) lines.push('Pulling the other way:', ...l.against.map(x => '- ' + x.text));
+  lines.push('No track record behind these flags: they are angles to check against the news and your own read.');
+  const sideMark = l.side ? `<b class="pick-side" title="${{l.side === 'over' ? 'Over' : 'Under'}}">${{l.side === 'over' ? '&#9650;' : '&#9660;'}}</b>` : '';
+  return `<span style="white-space:nowrap;"><span class="cov-tag cov-look" style="margin-right:4px;" title="${{escapeHtml(lines.join('\\n'))}}">&#128064; Look</span>${{sideMark}}</span>`;
 }}
 var fullBoardOpen = false;
 try {{ fullBoardOpen = localStorage.getItem('nfl_prop_dashboard_fullboard_v1') === '1'; }} catch (err) {{}}

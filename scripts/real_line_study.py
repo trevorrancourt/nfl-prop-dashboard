@@ -52,6 +52,7 @@ STUDY_JS = r"""(keys) => {
   tp.review.forEach(c => { tier[markKey(c.e)] = 'review'; });
   (tp.more || []).forEach(c => { tier[markKey(c.e)] = 'more'; });
   const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+  const byGame = {};
   for (const r of ROWS) {
     if (r.vegas_line === null || r.vegas_line === undefined || !keys.includes(gameKey(r))) continue;
     const e = enrichRow(r, selectedWeeks, dc);
@@ -69,9 +70,11 @@ STUDY_JS = r"""(keys) => {
       vac = e.stat_col === 'passing_yards' ? 0 : ladderVacated(e.team, set.vol).share;
     }
     const lad = (typeof ladderInfo === 'function') ? ladderInfo(e) : null;
+    (byGame[gameKey(e)] = byGame[gameKey(e)] || []).push(e);
     const books = {};
     for (const bk of ['draftkings', 'fanduel', 'betmgm']) books[bk] = [e[bk + '_line'], e[bk + '_over_price'], e[bk + '_under_price']];
     out.push({
+      mk: markKey(e),
       player: e.player, team: e.team, opp: e.opponent, pos: e.position, stat: e.stat_col, game: gameKey(e),
       line: e.vegas_line, books,
       season_avg: mean(sv), sel_avg: mean(sel), last1: sv.length ? sv[0] : null, n_season: sv.length,
@@ -88,6 +91,15 @@ STUDY_JS = r"""(keys) => {
       tier: tier[markKey(e)] || null,
     });
   }
+  // 👀 game-view look flags (2026-11-12): what the page would flag when each game is selected.
+  const lookBy = {};
+  if (typeof computeGameLooks === 'function') {
+    Object.values(byGame).forEach(list => computeGameLooks(list).forEach((v, k) => { lookBy[k] = v; }));
+  }
+  out.forEach(o => {
+    const l = lookBy[o.mk];
+    o.look = l ? { side: l.side, score: l.score, kinds: l.why.map(x => x.kind), bet: l.bet } : null;
+  });
   return out;
 }"""
 
@@ -363,6 +375,33 @@ def main():
             strength = lambda t: abs((t[0].ant or 0) - t[1]["line"]) / t[1]["line"] if t[1]["line"] else 0
             best.append(max(v, key=strength))
         L.append(f"    one pick per player-week (strongest kept): {_sum([(ok, b['price']) for _, b, ok in best])}")
+
+    # G. The game-view 👀 look flags, graded on the flagged side at its best line and price.
+    if "look" in df:
+        items = []
+        for r in df.itertuples():
+            lk = r.look
+            if not isinstance(lk, dict) or not lk.get("bet") or lk["bet"].get("price") is None or not lk.get("side"):
+                continue
+            b = lk["bet"]
+            if r.actual == b["line"]:
+                continue
+            ok = (r.actual > b["line"]) if b["side"] == "over" else (r.actual < b["line"])
+            items.append((r, lk, ok, b["price"]))
+        L.append("\nG. 👀 GAME-VIEW LOOK FLAGS (flagged side, at its best line and price; flags are for lines NOT on the ranked list):")
+        L.append(f"  all graded props for comparison: Over hit {df.over.mean():.1%}, Under hit {1 - df.over.mean():.1%} (n={len(df)})")
+        if items:
+            L.append(f"  all flags: {_sum([(ok, pc) for _, _, ok, pc in items])}")
+            for sd in ("over", "under"):
+                L.append(f"    {sd}: {_sum([(ok, pc) for _, lk, ok, pc in items if lk['side'] == sd])}")
+            kinds = sorted({k for _, lk, _, _ in items for k in lk["kinds"]})
+            L.append("    by reason (a flag can have several): " + "; ".join(
+                f"{k} {_sum([(ok, pc) for _, lk, ok, pc in items if k in lk['kinds']])}" for k in kinds))
+            L.append("    by score: " + "; ".join(
+                f"{lo}-{hi} {_sum([(ok, pc) for _, lk, ok, pc in items if lo <= lk['score'] < hi])}" for lo, hi in ((2, 3), (3, 4), (4, 99))))
+            L.append("    by week: " + "; ".join(f"wk{w} {_sum([(ok, pc) for r, _, ok, pc in items if r.week == w])}" for w in sorted({r.week for r, _, _, _ in items})))
+        else:
+            L.append("  no flags graded")
 
     text = "\n".join(L)
     print(text)

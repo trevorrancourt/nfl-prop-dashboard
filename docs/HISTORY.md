@@ -3682,3 +3682,13 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
 - **Notice:** the "Review list" build notice shows each tier's Over/Under split.
 - **Still open:** the Top 3 takes the lightest MUST BET prices first (the question from earlier today, unanswered).
 
+## 👀 Look flags in the game view (2026-11-12)
+- Trevor: "can we build a flag in where when i filter by specific games, it adds a flag to a line i should look to? kinda like something where it's not flagged as an overall bet, but when i analyze that game i should look at that".
+- **Built:** when one game is selected, lines outside the ranked picks get "👀 Look" (+▲/▼) if they have a strong reason.
+  - Reasons: 🎯 outlier defense, 🪜 ladder board, ⬆ alt line, a strong 🩹 help/hurt, a streak 3-star that didn't rank, and strong streaks blocked by the role-change / blowout / matchup-history rules. Script, 📅 and 💡 only add weight.
+  - Limits: 6 per game, one per player, price -170 or better.
+- **Tightened after a first look at the Week 6 board:** the first version had 52 flags across 14 games, including flags built from two weak reasons (💡 + 📅) and a -205 price.
+  - Now each flag needs one strong reason, and the count is 39 (about 3 per game).
+  - The hover shows the reasons plus any pulling the other way, e.g. SEA@DEN: a corner out helps the receivers even though DEN ranks low.
+- **Honest status:** no track record; flags are angles to check, not picks. `real_line_study.py` section G grades them.
+
