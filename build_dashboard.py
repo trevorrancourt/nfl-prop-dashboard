@@ -5858,7 +5858,7 @@ function myRulesHtml() {{
   return sec('The board (2026-11-10)', [
       '<b>&#128269; Best bets</b> is the only pick label on the board now, in three tiers: <b>&#11088; Best 3</b> (gold; the strict MUST BET picks, one per game, and the only phone alerts), <b>&#128269; Next 10</b> (the next best from the pick types that held up in tests) and <b>&#10133; More 17</b> (Overs and Unders take turns so it is not all Unders; the Overs here come from pick types with little or no test edge, only at -130 or better, so treat this tier as lower confidence). The streak tiers below (&#128293;/&#129482;/&#11088;/&#128161;/&#10067;) still run underneath -- MUST BETs and &#127919; 3-stars feed the lists -- but they are no longer shown. Flags on a pick: &#128197; the full season agrees with the bet, &#10004;/&#9888; script = the game script backs it / argues against it. Next to the player name: &#127919; outlier defense, &#11014; alt-line idea, &#129692; ladder board, &#129657; injuries.',
     ]) + sec('&#128064; Look flags (2026-11-12)', [
-      'When you filter to ONE game, lines that are not in the ranked picks but have a reason to be checked get a <b>&#128064; Look</b> flag (with &#9650;/&#9660; for the side it points to), listed right after that game\u2019s ranked picks. It needs at least one strong reason: a &#127919; outlier defense, the &#129692; ladder board, a &#11014; alt-line idea, a key injury that helps or hurts him, a streak 3-star that did not rank, or a strong streak the board blocked (role change, blowout rule, matchup history). Game script, full-season agreement and &#128161; only add weight. At most 6 per game, one per player, priced -170 or better. Hover for the reasons, including any that pull the other way. These flags have no track record: they are angles to check against the news and your own read, they never buzz your phone, and they are not picks.',
+      'When you filter to ONE game, lines that are not in the ranked picks but have a reason to be checked get a <b>&#128064; Look</b> flag (with &#9650;/&#9660; for the side it points to), listed right after that game\u2019s ranked picks. It needs at least one strong reason: a &#127919; outlier defense, the &#129692; ladder board, a &#11014; alt-line idea, a key injury that helps or hurts him, a streak 3-star that did not rank, or a strong streak the board blocked (role change, blowout rule, matchup history). Game script, full-season agreement and &#128161; only add weight. At most 6 per game, one per player, priced -170 or better. Hover for the reasons, including any that pull the other way. These flags are NOT picks: lines flagged like this went 153-174 (47%) on Weeks 4-9, no better than a coin flip, so use them to know where to dig (news, your own read), not as bets. They never buzz your phone.',
     ]) + sec('Your reasons (2026-11-11)', [
       'When you mark a row &#10060; Pass or &#9989; Bet, a box opens: say why in your own words, tap a tag, or both. It is saved with your marks (synced to your account, included in the My Bets backup) together with what the board said at that moment. Each week you paste the backup to me: I grade every reason against what actually happened (would the board\u2019s side have won?) and turn the ones that keep being right into rules. Nothing changes the model by itself.',
     ]) + sec('The groups', [
@@ -6199,6 +6199,8 @@ function pickFlags(r) {{
 var _gameLooks = new Map();
 const GAME_LOOK_MAX = 6;
 const GAME_LOOK_MIN = 2;
+// Graded on Weeks 4-9 at the closing lines (study section G, 2026-11-12): 77-75 then 76-99.
+const LOOK_RECORD = '153-174 (47%, about -12% ROI) in Weeks 4-9';
 function lookReasons(e) {{
   const out = [];
   const add = (kind, side, w, text) => out.push({{ kind, side, w, text }});
@@ -6277,7 +6279,7 @@ function lookTag(r) {{
     'Not an overall pick -- this flag only shows while you filter to one game.',
   ].concat(l.why.map(x => '- ' + x.text));
   if (l.against.length) lines.push('Pulling the other way:', ...l.against.map(x => '- ' + x.text));
-  lines.push('No track record behind these flags: they are angles to check against the news and your own read.');
+  lines.push(`Tested: lines flagged like this went ${{LOOK_RECORD}} -- no better than a coin flip. Use the flag to know where to dig (news, your own read), not as a bet.`);
   const sideMark = l.side ? `<b class="pick-side" title="${{l.side === 'over' ? 'Over' : 'Under'}}">${{l.side === 'over' ? '&#9650;' : '&#9660;'}}</b>` : '';
   return `<span style="white-space:nowrap;"><span class="cov-tag cov-look" style="margin-right:4px;" title="${{escapeHtml(lines.join('\\n'))}}">&#128064; Look</span>${{sideMark}}</span>`;
 }}

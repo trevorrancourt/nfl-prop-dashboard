@@ -3690,5 +3690,9 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
 - **Tightened after a first look at the Week 6 board:** the first version had 52 flags across 14 games, including flags built from two weak reasons (💡 + 📅) and a -205 price.
   - Now each flag needs one strong reason, and the count is 39 (about 3 per game).
   - The hover shows the reasons plus any pulling the other way, e.g. SEA@DEN: a corner out helps the receivers even though DEN ranks low.
-- **Honest status:** no track record; flags are angles to check, not picks. `real_line_study.py` section G grades them.
+- **Honest status:** no track record; flags are angles to check, not picks. `real_line_study.py` section G grades them.- **Graded (study section G, Wks 4-6 then 7-9):** all flags 77-75 (51%, ROI -5%) then 76-99 (43%, ROI -19%), so **153-174 (47%, about -12%)**.
+  - Compared with all props in 7-9 (Over 46%, Under 54%): flagged Overs 42%, flagged Unders 46%.
+  - By reason, pooled: injury-hurts 9-21, script 12-29, 💡 20-28, ladder 36-45, outlier 44-52, 📅 30-38, role-change block 32-32, streak 3-star 37-37, injury-helps 46-47, alt 23-24.
+  - Possible explanation: obvious angles (injuries, script) are already in the line.
+- **Done about it:** the hover and My rules now say the tested record instead of "no track record". Pruning the worst reasons (injury-hurts, script, 💡) is offered, not done.
 
