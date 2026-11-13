@@ -3712,3 +3712,9 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
   - Caveat: the thresholds were set before the run but on the same weeks, so this isn't clean out-of-sample.- **Refined the same day:** exempting every MUST BET put 12 of the first 14 picks on juiced backup props (INTs, 1.5 receptions, Rec Yds Under 9.5).
   - Now only the Best 3 are exempt (13-0 evidence is about the Best tier); Next 10 and More 17 are steady starters only, MUST BET overflow included.
 
+## "How else do i need to say that you are overweighting unders" (2026-11-13)
+- After the steady-starters change the Next 10 was still 7 Unders out of 9 (only More 17 alternated), and he said so again.
+- **Changed:** Next 10 and More 17 both take Overs and Unders in turns. The Best 3 can't have three of one side.
+  - Overs for Next come from the evidence groups first, then streak 3-stars and projection-over (price -130+, yardage line 10+).
+- **Lesson:** he had said it four times; each answer defended the tests instead of changing the list. When he repeats a preference, change it and report the cost.
+

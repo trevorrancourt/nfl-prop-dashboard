@@ -5865,7 +5865,7 @@ function myRulesHtml() {{
   const li = s => `<li style="margin:3px 0;">${{s}}</li>`;
   const sec = (title, items) => `<h3 class="modal-section-title">${{title}}</h3><ul style="margin:4px 0 10px 18px; padding:0;">${{items.map(li).join('')}}</ul>`;
   return sec('The board (2026-11-10)', [
-      '<b>&#128269; Best bets</b> is the only pick label on the board now, in three tiers: <b>&#11088; Best 3</b> (gold; the strict MUST BET picks, one per game, and the only phone alerts), <b>&#128269; Next 10</b> (the next best from the pick types that held up in tests) and <b>&#10133; More 17</b> (Overs and Unders take turns so it is not all Unders; the Overs here come from pick types with little or no test edge, only at -130 or better, so treat this tier as lower confidence). The streak tiers below (&#128293;/&#129482;/&#11088;/&#128161;/&#10067;) still run underneath -- MUST BETs and &#127919; 3-stars feed the lists -- but they are no longer shown. Flags on a pick: &#128197; the full season agrees with the bet, &#10004;/&#9888; script = the game script backs it / argues against it. Next to the player name: &#127919; outlier defense, &#11014; alt-line idea, &#129692; ladder board, &#129657; injuries.',
+      '<b>&#128269; Best bets</b> is the only pick label on the board now, in three tiers: <b>&#11088; Best 3</b> (gold; the strict MUST BET picks, one per game, never three of the same side, and the only phone alerts), <b>&#128269; Next 10</b> and <b>&#10133; More 17</b> (in both, Overs and Unders take turns, best of each side first, so neither is mostly Unders; the Overs include pick types with little or no test edge, only at -130 or better, so some of these are lower confidence). The streak tiers below (&#128293;/&#129482;/&#11088;/&#128161;/&#10067;) still run underneath -- MUST BETs and &#127919; 3-stars feed the lists -- but they are no longer shown. Flags on a pick: &#128197; the full season agrees with the bet, &#10004;/&#9888; script = the game script backs it / argues against it. Next to the player name: &#127919; outlier defense, &#11014; alt-line idea, &#129692; ladder board, &#129657; injuries.',
     ]) + sec('&#128737; Steady starters (2026-11-13)', [
       'The Next / More picks only include <b>starters</b> (his season average is a real-role volume: 3.5+ receptions, 35+ rush or receiving yards, 9+ carries, 150+ pass yards, and so on) whose game-to-game swings are modest (coefficient of variation 0.5 or less over his last 8 games). That keeps out backups and the wild props (interceptions, one-catch lines, big-play yardage). The <b>Best 3</b> (the phone alerts) are left alone: on the Weeks 4-9 tests the filter would have removed 13 of them and all 13 won, because the heavy price already shows the books agree. It\u2019s the <b>&#128737; Steady starters only</b> box next to Best bets only; untick it to see the unfiltered list. On those tests the filtered picks (without MUST BETs) went about 60-70%.',
     ]) + sec('&#128064; Look flags (2026-11-12)', [
@@ -6099,10 +6099,12 @@ function topPicks() {{
   cands.sort((a, b) => (b.value - a.value) || (b.p - a.p));
   const top = [], games = new Set(), used = new Set(), who = new Set();
   const whoKey = c => c.e.player + '|' + c.e.team;
+  const sideN = {{ over: 0, under: 0 }};
   for (const c of cands) {{
     if (top.length >= TOP_SIZE) break;
     if (!TOP_GROUPS.includes(c.g) || c.p < TOP_MIN_P || c.value < TOP_MIN_VALUE || games.has(gameKey(c.e)) || who.has(whoKey(c))) continue;
-    top.push(c); games.add(gameKey(c.e)); used.add(markKey(c.e)); who.add(whoKey(c));
+    if (sideN[c.bet.side] >= 2) continue; // never three of the same side (2026-11-13, per Trevor: too many Unders)
+    top.push(c); games.add(gameKey(c.e)); used.add(markKey(c.e)); who.add(whoKey(c)); sideN[c.bet.side]++;
   }}
   // Next 10 (2026-11-10, per Trevor: "shouldn't we have one thing of bets to
   // review that we actually think are good?"): the strongest groups first
@@ -6112,32 +6114,36 @@ function topPicks() {{
   const strength = c => c.g === 'must_market' ? -c.need
     : (c.e.anticipated && c.bet.line ? Math.abs(c.e.anticipated - c.bet.line) / c.bet.line : 0);
   const ordered = cands.slice().sort((a, b) => (b.p - a.p) || (strength(b) - strength(a)));
-  const review = [];
-  for (const c of ordered) {{
-    if (review.length >= NEXT_SIZE) break;
-    // One pick per player (2026-11-11): the same player twice (Rec Yds + Receptions) is one bet's worth of information.
-    if (!REVIEW_GROUPS.includes(c.g) || used.has(markKey(c.e)) || who.has(whoKey(c)) || c.value <= 0) continue;
-    if (steadyOnly && !c.steadyOk) continue; // 🛡 Steady starters only (the Best 3 are exempt)
-    review.push(c); used.add(markKey(c.e)); who.add(whoKey(c));
-  }}
-  // More 17: Overs and Unders take turns, best of each side first, so the
-  // tier isn't all Unders. Anything outside the MUST BET group has to be
-  // priced -130 or better.
-  const moreOk = c => !used.has(markKey(c.e)) && !who.has(whoKey(c)) && (!steadyOnly || c.steadyOk) && (c.g === 'must_market' || c.bet.price >= MAX_JUICE_PRICE)
+  // Overs and Unders take turns in BOTH Next 10 and More 17, best of each side
+  // first (2026-11-13, per Trevor, again: "how else do i need to say that you
+  // are overweighting unders"). Before this only More 17 alternated, so the
+  // Next 10 was seven or eight Unders. Overs from the groups with little test
+  // edge (streak 3-star, projection-over) need a price of -130 or better and a
+  // yardage line of 10+; nothing here needs a positive value except the groups
+  // that tested well (REVIEW_GROUPS).
+  const extraOk = c => c.bet.price >= MAX_JUICE_PRICE
+    && !(YARD_STATS.has(c.e.stat_col) && c.bet.line < MORE_MIN_YARD_LINE);
+  const baseOk = c => !used.has(markKey(c.e)) && !who.has(whoKey(c)) && (!steadyOnly || c.steadyOk);
+  const nextOk = c => baseOk(c) && (REVIEW_GROUPS.includes(c.g) ? c.value > 0 : extraOk(c));
+  const moreOk = c => baseOk(c) && (c.g === 'must_market' || c.bet.price >= MAX_JUICE_PRICE)
     && !(MORE_EXTRA_GROUPS.includes(c.g) && YARD_STATS.has(c.e.stat_col) && c.bet.line < MORE_MIN_YARD_LINE);
   const sides = {{ over: ordered.filter(c => c.bet.side === 'over'), under: ordered.filter(c => c.bet.side === 'under') }};
-  const at = {{ over: 0, under: 0 }};
-  const more = [];
-  let turn = 'over';
-  while (more.length < MORE_SIZE && (at.over < sides.over.length || at.under < sides.under.length)) {{
-    const pool = sides[turn];
-    while (at[turn] < pool.length && !moreOk(pool[at[turn]])) at[turn]++;
-    if (at[turn] < pool.length) {{
-      const c = pool[at[turn]++];
-      more.push(c); used.add(markKey(c.e)); who.add(whoKey(c));
+  const takeTurns = (limit, ok) => {{
+    const at = {{ over: 0, under: 0 }}, out = [];
+    let turn = 'over';
+    while (out.length < limit && (at.over < sides.over.length || at.under < sides.under.length)) {{
+      const pool = sides[turn];
+      while (at[turn] < pool.length && !ok(pool[at[turn]])) at[turn]++;
+      if (at[turn] < pool.length) {{
+        const c = pool[at[turn]++];
+        out.push(c); used.add(markKey(c.e)); who.add(whoKey(c));
+      }}
+      turn = turn === 'over' ? 'under' : 'over';
     }}
-    turn = turn === 'over' ? 'under' : 'over';
-  }}
+    return out;
+  }};
+  const review = takeTurns(NEXT_SIZE, nextOk);
+  const more = takeTurns(MORE_SIZE, moreOk);
   return (_topCache = {{ top, review, more }});
 }}
 const fmtPrice = v => (v > 0 ? '+' + v : String(v));
@@ -6185,7 +6191,7 @@ function pickTag(r) {{
   const lines = [
     `${{TIER_NAME[tier]}} #${{n}} of ${{all.length}}: ${{b.side === 'over' ? 'Over' : 'Under'}} ${{b.line}} ${{e.stat_label}} at ${{b.price > 0 ? '+' : ''}}${{b.price}} (${{b.book}})`,
     alert ? '📲 Also a phone alert: one of the best-priced MUST BETs (max one per game).' : null,
-    tier === 3 ? 'Lower confidence: this tier takes Overs and Unders in turns on purpose, so some of it has little test evidence behind it.' : null,
+    (tier === 3 || MORE_EXTRA_GROUPS.includes(c.g)) ? 'Lower confidence: Overs and Unders take turns in the lists on purpose, and this kind of pick tested near a coin flip.' : null,
     e.anticipated !== null && e.anticipated !== undefined ? `Projects ${{r1(e.anticipated)}} vs the ${{b.line}} line` : null,
     last.length ? `Last ${{last.length}} games: ${{last.join(', ')}}` : null,
     c.steady ? `${{c.steady.starter ? 'Starter' : 'Backup-level volume'}}, ${{c.steady.steady ? 'steady' : 'volatile'}}: averages ${{r1(c.steady.avg)}} a game, swings (CV) ${{c.steady.cv.toFixed(2)}}` : null,
