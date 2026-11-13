@@ -77,7 +77,7 @@ STUDY_JS = r"""(keys) => {
       mk: markKey(e),
       player: e.player, team: e.team, opp: e.opponent, pos: e.position, stat: e.stat_col, game: gameKey(e),
       line: e.vegas_line, books,
-      season_avg: mean(sv), sel_avg: mean(sel), last1: sv.length ? sv[0] : null, n_season: sv.length,
+      season_avg: mean(sv), sel_avg: mean(sel), last1: sv.length ? sv[0] : null, n_season: sv.length, gl: sv.slice(0, 10),
       ant: e.anticipated, share: e.share,
       def_rank: e.def_rank, def_max: e.def_rank_max,
       o_prate: co ? co.pRate : null, o_drate: co ? co.dRate : null, o_pgames: co ? co.pGames : null,
@@ -402,6 +402,88 @@ def main():
             L.append("    by week: " + "; ".join(f"wk{w} {_sum([(ok, pc) for r, _, ok, pc in items if r.week == w])}" for w in sorted({r.week for r, _, _, _ in items})))
         else:
             L.append("  no flags graded")
+
+    # H. Taste test (2026-11-13, per Trevor: "i really don't like the lines you're proposing
+    # to me. they're all shitty unders, high odds lines, backup players, too much volatility,
+    # things that need to go over just a bit"). (1) What each of his preferences does to the
+    # record of the ranked list; (2) how a "comfortable starter" profile does on its own.
+    import statistics
+    MIN_AVG = {"receptions": 3.5, "receiving_yards": 35, "rushing_yards": 35, "carries": 9, "passing_yards": 150,
+               "completions": 14, "attempts": 22, "passing_tds": 0.5, "passing_interceptions": 0.3}
+    def best_price(books, line, side):
+        ps = [b[1 if side == "over" else 2] for b in books.values() if b and b[0] == line and b[1 if side == "over" else 2]]
+        return max(ps) if ps else None
+    def feats(r, side, line):
+        gl = [v for v in (r.gl if isinstance(r.gl, list) else []) if v is not None]
+        bad = lambda v: v is None or (isinstance(v, float) and math.isnan(v))
+        if len(gl) < 4 or bad(r.sel_avg) or bad(r.season_avg) or not line:
+            return None
+        ov = side == "over"
+        g8 = gl[:8]
+        m = statistics.fmean(g8)
+        cv = statistics.pstdev(g8) / m if m > 0 else 9
+        cush = ((r.sel_avg - line) if ov else (line - r.sel_avg)) / line
+        cush_s = ((r.season_avg - line) if ov else (line - r.season_avg)) / line
+        hits = sum(1 for v in gl[:4] if (v > line if ov else v < line))
+        floor = MIN_AVG.get(r.stat, 0)
+        if r.stat == "rushing_yards" and r.pos == "QB":
+            floor = 15
+        if r.stat == "receptions" and r.pos == "RB":
+            floor = 2.5
+        starter = r.season_avg >= floor and len(gl) >= 4
+        return dict(cv=cv, cush=cush, cush_s=cush_s, hits=hits, starter=starter)
+    def tally(items):
+        n = len(items)
+        if not n:
+            return "n=0"
+        w = sum(1 for it in items if it["ok"])
+        roi = sum((dec(it["price"]) - 1) if it["ok"] else -1 for it in items) / n
+        return f"n={n:3d}  {w}-{n - w} ({w / n:.0%}, ROI {roi:+.0%})"
+    L.append("\nH. TASTE TEST -- what each preference does (closing lines; STARTER = averages at least a real-role volume; LOW-VOL = coefficient of variation 0.5 or less over his last 8 games; CUSHION = last-4 average at least 15% past the line on his side):")
+    pool = []
+    for r in df.itertuples():
+        b = r.bet if isinstance(r.bet, dict) and isinstance(r.tier, str) else None
+        if not b or b.get("price") is None or r.actual == b["line"]:
+            continue
+        f = feats(r, b["side"], b["line"])
+        if not f:
+            continue
+        ok = (r.actual > b["line"]) if b["side"] == "over" else (r.actual < b["line"])
+        pool.append(dict(ok=ok, price=b["price"], side=b["side"], tier=r.tier, **f))
+    L.append(f"  (1) the ranked list (Best + Next + More), then each filter in turn (cumulative):")
+    steps = [("all list picks", lambda x: True),
+             ("+ starters only", lambda x: x["starter"]),
+             ("+ price -130 or better", lambda x: x["starter"] and x["price"] >= -130),
+             ("+ low volatility", lambda x: x["starter"] and x["price"] >= -130 and x["cv"] <= 0.5),
+             ("+ cushion 15%+", lambda x: x["starter"] and x["price"] >= -130 and x["cv"] <= 0.5 and x["cush"] >= 0.15)]
+    for name, fn in steps:
+        L.append(f"    {name:26s} {tally([x for x in pool if fn(x)])}")
+    L.append("    by itself: starters " + tally([x for x in pool if x["starter"]]) + " | price -130+ " + tally([x for x in pool if x["price"] >= -130])
+             + " | low-vol " + tally([x for x in pool if x["cv"] <= 0.5]) + " | Overs " + tally([x for x in pool if x["side"] == "over"]) + " | Unders " + tally([x for x in pool if x["side"] == "under"]))
+    L.append("  (2) any prop that fits the 'comfortable starter' profile (either side, one row per prop-side):")
+    comf = []
+    for r in df.itertuples():
+        for side in ("over", "under"):
+            f = feats(r, side, r.line)
+            if not f:
+                continue
+            price = best_price(r.books, r.line, side)
+            if price is None:
+                continue
+            ok = (r.actual > r.line) if side == "over" else (r.actual < r.line)
+            comf.append(dict(ok=ok, price=price, side=side, stat=r.stat, **f))
+    base = lambda x: x["starter"] and x["price"] >= -130 and x["cv"] <= 0.5
+    for label, fn in (("starter, price -130+, low-vol (no cushion rule)", base),
+                      ("  + cushion 15%+, hit 3 of last 4", lambda x: base(x) and x["cush"] >= 0.15 and x["hits"] >= 3),
+                      ("  + cushion 25%+, hit 3 of last 4", lambda x: base(x) and x["cush"] >= 0.25 and x["hits"] >= 3),
+                      ("  + cushion 15%+, hit 4 of 4, season also 10%+", lambda x: base(x) and x["cush"] >= 0.15 and x["hits"] == 4 and x["cush_s"] >= 0.10)):
+        L.append(f"    {label:48s} {tally([x for x in comf if fn(x)])}")
+        for sd in ("over", "under"):
+            L.append(f"        {sd:5s} {tally([x for x in comf if fn(x) and x['side'] == sd])}")
+    L.append("    by stat (cushion 15%+, hit 3 of 4, base filters): " + "; ".join(
+        f"{st} {tally([x for x in comf if base(x) and x['cush'] >= 0.15 and x['hits'] >= 3 and x['stat'] == st])}" for st in sorted({x['stat'] for x in comf})
+        if len([x for x in comf if base(x) and x['cush'] >= 0.15 and x['hits'] >= 3 and x['stat'] == st]) >= 8))
+    L.append(f"    for comparison, every prop-side priced -130 or better: {tally([x for x in comf if x['price'] >= -130])}")
 
     text = "\n".join(L)
     print(text)
