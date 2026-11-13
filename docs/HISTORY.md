@@ -3706,5 +3706,8 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
   - A hot player whose Over is at a fair price is a streak the market doesn't believe; MUST BET streaks win because the juice shows the books agree.
 - **His own bets** (58 graded): 31-27; cushion 15%+ 24-14 vs under 15% 7-13; median price -114. His selection beats the blind profile by a wide margin on a small sample.
 - **Built:** 🛡 Steady starters only (default on): starters (volume floors by stat) with CV ≤ 0.5. Untick for the unfiltered list.
-- **Not built, on purpose:** a "comfortable Overs" list (it tests at 38%). Heavy juice (-131..-170) stays: dropping it removed the best picks (list picks at -130+ went 48-47).
+- **Not built, on purpose:** a "comfortable Overs" list (it tests at 38%). Heavy juice (-131..-170) stays: dropping it removed the best picks (list picks at -130+ went 48-47).- **Steady filter graded** (applied to every tier, Weeks 4-6 then 7-9): Best 3-3, 4-2; Next 14-5, 23-11 (pooled 37-16, 70%); More 19-14, 19-16; More Overs 24-25 and Unders 14-5 pooled.
+  - Unfiltered it was Best 20-5, Next 54-33, More 57-55.
+  - **But it removed 13 MUST BETs and all 13 had won**, so MUST BETs are exempt (`STEADY_APPLIES_TO`).
+  - Caveat: the thresholds were set before the run but on the same weeks, so this isn't clean out-of-sample.
 
