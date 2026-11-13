@@ -3709,5 +3709,6 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
 - **Not built, on purpose:** a "comfortable Overs" list (it tests at 38%). Heavy juice (-131..-170) stays: dropping it removed the best picks (list picks at -130+ went 48-47).- **Steady filter graded** (applied to every tier, Weeks 4-6 then 7-9): Best 3-3, 4-2; Next 14-5, 23-11 (pooled 37-16, 70%); More 19-14, 19-16; More Overs 24-25 and Unders 14-5 pooled.
   - Unfiltered it was Best 20-5, Next 54-33, More 57-55.
   - **But it removed 13 MUST BETs and all 13 had won**, so MUST BETs are exempt (`STEADY_APPLIES_TO`).
-  - Caveat: the thresholds were set before the run but on the same weeks, so this isn't clean out-of-sample.
+  - Caveat: the thresholds were set before the run but on the same weeks, so this isn't clean out-of-sample.- **Refined the same day:** exempting every MUST BET put 12 of the first 14 picks on juiced backup props (INTs, 1.5 receptions, Rec Yds Under 9.5).
+  - Now only the Best 3 are exempt (13-0 evidence is about the Best tier); Next 10 and More 17 are steady starters only, MUST BET overflow included.
 

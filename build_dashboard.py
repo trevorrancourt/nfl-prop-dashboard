@@ -5867,7 +5867,7 @@ function myRulesHtml() {{
   return sec('The board (2026-11-10)', [
       '<b>&#128269; Best bets</b> is the only pick label on the board now, in three tiers: <b>&#11088; Best 3</b> (gold; the strict MUST BET picks, one per game, and the only phone alerts), <b>&#128269; Next 10</b> (the next best from the pick types that held up in tests) and <b>&#10133; More 17</b> (Overs and Unders take turns so it is not all Unders; the Overs here come from pick types with little or no test edge, only at -130 or better, so treat this tier as lower confidence). The streak tiers below (&#128293;/&#129482;/&#11088;/&#128161;/&#10067;) still run underneath -- MUST BETs and &#127919; 3-stars feed the lists -- but they are no longer shown. Flags on a pick: &#128197; the full season agrees with the bet, &#10004;/&#9888; script = the game script backs it / argues against it. Next to the player name: &#127919; outlier defense, &#11014; alt-line idea, &#129692; ladder board, &#129657; injuries.',
     ]) + sec('&#128737; Steady starters (2026-11-13)', [
-      'The Next / More picks (everything except MUST BETs) only include <b>starters</b> (his season average is a real-role volume: 3.5+ receptions, 35+ rush or receiving yards, 9+ carries, 150+ pass yards, and so on) whose game-to-game swings are modest (coefficient of variation 0.5 or less over his last 8 games). That keeps out backups and the wild props (interceptions, one-catch lines, big-play yardage). MUST BETs are left alone: on the Weeks 4-9 tests the filter would have removed 13 of them and all 13 won, because the heavy price already shows the books agree. It\u2019s the <b>&#128737; Steady starters only</b> box next to Best bets only; untick it to see the unfiltered list. On those tests the filtered picks (without MUST BETs) went about 60-70%.',
+      'The Next / More picks only include <b>starters</b> (his season average is a real-role volume: 3.5+ receptions, 35+ rush or receiving yards, 9+ carries, 150+ pass yards, and so on) whose game-to-game swings are modest (coefficient of variation 0.5 or less over his last 8 games). That keeps out backups and the wild props (interceptions, one-catch lines, big-play yardage). The <b>Best 3</b> (the phone alerts) are left alone: on the Weeks 4-9 tests the filter would have removed 13 of them and all 13 won, because the heavy price already shows the books agree. It\u2019s the <b>&#128737; Steady starters only</b> box next to Best bets only; untick it to see the unfiltered list. On those tests the filtered picks (without MUST BETs) went about 60-70%.',
     ]) + sec('&#128064; Look flags (2026-11-12)', [
       'When you filter to ONE game, lines that are not in the ranked picks but have a reason to be checked get a <b>&#128064; Look</b> flag (with &#9650;/&#9660; for the side it points to), listed right after that game\u2019s ranked picks. It needs at least one strong reason: a &#127919; outlier defense, the &#129692; ladder board, a &#11014; alt-line idea, a key injury that helps or hurts him, a streak 3-star that did not rank, or a strong streak the board blocked (role change, blowout rule, matchup history). Game script, full-season agreement and &#128161; only add weight. At most 6 per game, one per player, priced -170 or better. Hover for the reasons, including any that pull the other way. These flags are NOT picks: lines flagged like this went 153-174 (47%) on Weeks 4-9, no better than a coin flip, so use them to know where to dig (news, your own read), not as bets. They never buzz your phone.',
     ]) + sec('Your reasons (2026-11-11)', [
@@ -6056,12 +6056,13 @@ function groupRecord(g) {{
 // real-line study's taste test: on the ranked list, low-volatility picks kept
 // about a 59% hit rate (Weeks 4-9) and starters-only cost about 3 points.
 const STEADY_CV = 0.5;
-// MUST BETs are exempt (2026-11-13): when the filter was applied to them on
-// the Weeks 4-9 study it removed 13 of 25 Best picks and all 13 had won
-// (Best 20-5 unfiltered vs 7-5 filtered): INT / TD / short-line props that the
-// books juice because the streak is real. Their evidence is the juice, not
-// the steadiness. Add 'must_market' to STEADY_APPLIES_TO to filter them too.
-const STEADY_APPLIES_TO = ['proj_under', 'target3', 'streak3', 'proj_over'];
+// The Best 3 (the phone alerts) are exempt (2026-11-13): when the filter was
+// applied to them on the Weeks 4-9 study it removed 13 of 25 Best picks and
+// all 13 had won (Best 20-5 unfiltered vs 7-5 filtered): INT / TD / short-line
+// props the books juice because the streak is real. Their evidence is the
+// juice, not the steadiness. Everything else, MUST BET overflow included, has
+// to be a steady starter (exempting every MUST BET filled the Next 10 with
+// eight more juiced backup props).
 const STARTER_MIN_AVG = {{ receptions: 3.5, receiving_yards: 35, rushing_yards: 35, carries: 9, passing_yards: 150,
   completions: 14, attempts: 22, passing_tds: 0.5, passing_interceptions: 0.3 }};
 function steadyInfo(e) {{
@@ -6090,10 +6091,9 @@ function topPicks() {{
     const bet = pickBet(e);
     if (!bet || bet.price === null || bet.price === undefined) continue;
     const si = steadyInfo(e);
-    if (steadyOnly && STEADY_APPLIES_TO.includes(g) && (!si || !si.starter || !si.steady)) continue; // 🛡 Steady starters only (not MUST BETs)
     const rec = groupRecord(g);
     const need = impliedProb(bet.price);
-    cands.push({{ e, g, bet, rec, p: rec.p, need, value: rec.p - need, steady: si }});
+    cands.push({{ e, g, bet, rec, p: rec.p, need, value: rec.p - need, steady: si, steadyOk: !!(si && si.starter && si.steady) }});
   }}
   // Best 3: MUST BETs, least juice first (best value).
   cands.sort((a, b) => (b.value - a.value) || (b.p - a.p));
@@ -6117,12 +6117,13 @@ function topPicks() {{
     if (review.length >= NEXT_SIZE) break;
     // One pick per player (2026-11-11): the same player twice (Rec Yds + Receptions) is one bet's worth of information.
     if (!REVIEW_GROUPS.includes(c.g) || used.has(markKey(c.e)) || who.has(whoKey(c)) || c.value <= 0) continue;
+    if (steadyOnly && !c.steadyOk) continue; // 🛡 Steady starters only (the Best 3 are exempt)
     review.push(c); used.add(markKey(c.e)); who.add(whoKey(c));
   }}
   // More 17: Overs and Unders take turns, best of each side first, so the
   // tier isn't all Unders. Anything outside the MUST BET group has to be
   // priced -130 or better.
-  const moreOk = c => !used.has(markKey(c.e)) && !who.has(whoKey(c)) && (c.g === 'must_market' || c.bet.price >= MAX_JUICE_PRICE)
+  const moreOk = c => !used.has(markKey(c.e)) && !who.has(whoKey(c)) && (!steadyOnly || c.steadyOk) && (c.g === 'must_market' || c.bet.price >= MAX_JUICE_PRICE)
     && !(MORE_EXTRA_GROUPS.includes(c.g) && YARD_STATS.has(c.e.stat_col) && c.bet.line < MORE_MIN_YARD_LINE);
   const sides = {{ over: ordered.filter(c => c.bet.side === 'over'), under: ordered.filter(c => c.bet.side === 'under') }};
   const at = {{ over: 0, under: 0 }};
@@ -6188,6 +6189,7 @@ function pickTag(r) {{
     e.anticipated !== null && e.anticipated !== undefined ? `Projects ${{r1(e.anticipated)}} vs the ${{b.line}} line` : null,
     last.length ? `Last ${{last.length}} games: ${{last.join(', ')}}` : null,
     c.steady ? `${{c.steady.starter ? 'Starter' : 'Backup-level volume'}}, ${{c.steady.steady ? 'steady' : 'volatile'}}: averages ${{r1(c.steady.avg)}} a game, swings (CV) ${{c.steady.cv.toFixed(2)}}` : null,
+    alert && !c.steadyOk ? 'Kept anyway: the Best 3 are exempt from the steady-starter filter (these went 20-5 in the tests, even the volatile ones).' : null,
     e.must_why ? e.must_why.join('\\n') : null,
     `Why it's here: ${{PICK_GROUPS[c.g]}} -- that kind of pick went ${{c.rec.w}}-${{c.rec.l}} in our graded weeks.`,
   ].filter(Boolean);
