@@ -3696,3 +3696,15 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
   - Possible explanation: obvious angles (injuries, script) are already in the line.
 - **Done about it:** the hover and My rules now say the tested record instead of "no track record". Pruning the worst reasons (injury-hurts, script, 💡) is offered, not done.
 
+## Trevor doesn't like the lines (2026-11-13)
+- Trevor: "i really don't like the lines you're proposing to me. they're all shitty unders, high odds lines, backup players, too much volatility, things that need to go over just a bit. how do we fix".
+- **What the list was:** QB-rush and receptions Unders on backups, MUST BETs at -131..-170, and projection-over Overs on tiny lines. That's what tested best at the closing lines, which is not what he wants to bet.
+- **Taste test** (`real_line_study.py` section H; Weeks 4-6 local, 7-9 on Actions; needs 4+ games of history):
+  - Ranked list: all 94-74 (56%); starters only 42-37 (53%); price -130+ 48-47 (51%); low-volatility only 32-22 (59%); Overs 42-41, Unders 52-33.
+  - Any starter prop, price -130+, low-vol: 743-786 (49%, ROI about -6%); its Overs 345-428 (45%), Unders 398-358 (53%).
+  - **Cushion makes Overs worse:** 15%+ and 3 of last 4 → 69-111 (38%); 25%+ → 37-80 (32%); 4 of 4 with season 10%+ → 14-38 (27%). Same-profile Unders 25-17.
+  - A hot player whose Over is at a fair price is a streak the market doesn't believe; MUST BET streaks win because the juice shows the books agree.
+- **His own bets** (58 graded): 31-27; cushion 15%+ 24-14 vs under 15% 7-13; median price -114. His selection beats the blind profile by a wide margin on a small sample.
+- **Built:** 🛡 Steady starters only (default on): starters (volume floors by stat) with CV ≤ 0.5. Untick for the unfiltered list.
+- **Not built, on purpose:** a "comfortable Overs" list (it tests at 38%). Heavy juice (-131..-170) stays: dropping it removed the best picks (list picks at -130+ went 48-47).
+

@@ -1007,6 +1007,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="Only show the ranked picks (Best 3, Next 10, More 17).">
       <input type="checkbox" id="reviewOnlyFilter"> &#128269; Best bets only
     </label>
+    <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="Keep only starters (real-role volume) whose game-to-game swings are modest (coefficient of variation 0.5 or less over his last 8 games) in the Best / Next / More picks. Untick to see the picks with backups and wild props included.">
+      <input type="checkbox" id="steadyFilter" checked> &#128737; Steady starters only
+    </label>
     <button type="button" id="resetColsBtn" class="pos-btn" style="margin-left:16px;" title="Columns: drag a header to move it, drag the thin bar on a header's right edge to resize it. Your layout is saved in this browser. This puts every column back to its original spot and width.">&#8634; Reset columns</button>
     <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="Only show this week's &#129692; Ladder board players (the ones likeliest to go off -- see the Ladder board button).">
       <input type="checkbox" id="ladderOnlyFilter"> &#129692; Ladder only
@@ -1090,6 +1093,7 @@ let activeStat = "ALL";
 let activeGame = "ALL";
 let hideMarkedX = true; // starts ticked on every load (2026-10-16, per Trevor)
 let reviewOnly = false;
+let steadyOnly = true;
 let ladderOnly = false;
 let altOnly = false; // ⬆ Alt lines only (2026-10-30, per Trevor: "make a filter for the alts. would be a fun thing to parlay")
 let weakMatchupOnly = false;
@@ -4984,6 +4988,7 @@ const FILTER_STORAGE_KEY = 'nfl_prop_dashboard_filters_v1';
 const FILTER_BOXES = {{
   hideMarkedX: v => {{ hideMarkedX = v; }},
   reviewOnlyFilter: v => {{ reviewOnly = v; }},
+  steadyFilter: v => {{ steadyOnly = v; }},
   ladderOnlyFilter: v => {{ ladderOnly = v; }},
   altOnlyFilter: v => {{ altOnly = v; }},
   weakMatchupFilter: v => {{ weakMatchupOnly = v; }},
@@ -5007,6 +5012,10 @@ function saveFilterBoxes() {{
   }}
 }})();
 
+document.getElementById('steadyFilter').addEventListener('change', (e) => {{
+  steadyOnly = e.target.checked;
+  render();
+}});
 document.getElementById('reviewOnlyFilter').addEventListener('change', (e) => {{
   reviewOnly = e.target.checked;
   render();
@@ -5857,6 +5866,8 @@ function myRulesHtml() {{
   const sec = (title, items) => `<h3 class="modal-section-title">${{title}}</h3><ul style="margin:4px 0 10px 18px; padding:0;">${{items.map(li).join('')}}</ul>`;
   return sec('The board (2026-11-10)', [
       '<b>&#128269; Best bets</b> is the only pick label on the board now, in three tiers: <b>&#11088; Best 3</b> (gold; the strict MUST BET picks, one per game, and the only phone alerts), <b>&#128269; Next 10</b> (the next best from the pick types that held up in tests) and <b>&#10133; More 17</b> (Overs and Unders take turns so it is not all Unders; the Overs here come from pick types with little or no test edge, only at -130 or better, so treat this tier as lower confidence). The streak tiers below (&#128293;/&#129482;/&#11088;/&#128161;/&#10067;) still run underneath -- MUST BETs and &#127919; 3-stars feed the lists -- but they are no longer shown. Flags on a pick: &#128197; the full season agrees with the bet, &#10004;/&#9888; script = the game script backs it / argues against it. Next to the player name: &#127919; outlier defense, &#11014; alt-line idea, &#129692; ladder board, &#129657; injuries.',
+    ]) + sec('&#128737; Steady starters (2026-11-13)', [
+      'The Best / Next / More picks only include <b>starters</b> (his season average is a real-role volume: 3.5+ receptions, 35+ rush or receiving yards, 9+ carries, 150+ pass yards, and so on) whose game-to-game swings are modest (coefficient of variation 0.5 or less over his last 8 games). That keeps out backups and the wild props (interceptions, one-catch lines, big-play yardage). It\u2019s the <b>&#128737; Steady starters only</b> box next to Best bets only; untick it to see the unfiltered list. On the Weeks 4-9 tests, low-volatility picks kept about a 59% hit rate.',
     ]) + sec('&#128064; Look flags (2026-11-12)', [
       'When you filter to ONE game, lines that are not in the ranked picks but have a reason to be checked get a <b>&#128064; Look</b> flag (with &#9650;/&#9660; for the side it points to), listed right after that game\u2019s ranked picks. It needs at least one strong reason: a &#127919; outlier defense, the &#129692; ladder board, a &#11014; alt-line idea, a key injury that helps or hurts him, a streak 3-star that did not rank, or a strong streak the board blocked (role change, blowout rule, matchup history). Game script, full-season agreement and &#128161; only add weight. At most 6 per game, one per player, priced -170 or better. Hover for the reasons, including any that pull the other way. These flags are NOT picks: lines flagged like this went 153-174 (47%) on Weeks 4-9, no better than a coin flip, so use them to know where to dig (news, your own read), not as bets. They never buzz your phone.',
     ]) + sec('Your reasons (2026-11-11)', [
@@ -6037,6 +6048,29 @@ function groupRecord(g) {{
   }}
   return {{ w, l, p: (w + TOP_PRIOR * 0.5) / (w + l + TOP_PRIOR) }};
 }}
+// Steady starters (2026-11-13, per Trevor: "i really don't like the lines you're
+// proposing to me. they're all shitty unders, high odds lines, backup players,
+// too much volatility"). A pick has to be a STARTER (his season average is at
+// least a real-role volume for the stat) and STEADY (coefficient of variation
+// over his last 8 games no more than STEADY_CV). Same definitions as the
+// real-line study's taste test: on the ranked list, low-volatility picks kept
+// about a 59% hit rate (Weeks 4-9) and starters-only cost about 3 points.
+const STEADY_CV = 0.5;
+const STARTER_MIN_AVG = {{ receptions: 3.5, receiving_yards: 35, rushing_yards: 35, carries: 9, passing_yards: 150,
+  completions: 14, attempts: 22, passing_tds: 0.5, passing_interceptions: 0.3 }};
+function steadyInfo(e) {{
+  const vals = playerSelectedIndices(e, seasonWeeks()).map(i => e.game_log[i]).filter(v => v !== null && v !== undefined);
+  if (vals.length < 4) return null;
+  const v8 = vals.slice(0, 8);
+  const m = v8.reduce((a, b) => a + b, 0) / v8.length;
+  const sd = Math.sqrt(v8.reduce((a, b) => a + (b - m) * (b - m), 0) / v8.length);
+  const cv = m > 0 ? sd / m : 9;
+  const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+  let floor = STARTER_MIN_AVG[e.stat_col] || 0;
+  if (e.stat_col === 'rushing_yards' && e.position === 'QB') floor = 15;
+  if (e.stat_col === 'receptions' && e.position === 'RB') floor = 2.5;
+  return {{ cv, avg, starter: avg >= floor, steady: cv <= STEADY_CV }};
+}}
 var _topCache = null;
 function topPicks() {{
   if (_topCache) return _topCache;
@@ -6049,9 +6083,11 @@ function topPicks() {{
     if (!g || !POOL.includes(g)) continue;
     const bet = pickBet(e);
     if (!bet || bet.price === null || bet.price === undefined) continue;
+    const si = steadyInfo(e);
+    if (steadyOnly && (!si || !si.starter || !si.steady)) continue; // 🛡 Steady starters only
     const rec = groupRecord(g);
     const need = impliedProb(bet.price);
-    cands.push({{ e, g, bet, rec, p: rec.p, need, value: rec.p - need }});
+    cands.push({{ e, g, bet, rec, p: rec.p, need, value: rec.p - need, steady: si }});
   }}
   // Best 3: MUST BETs, least juice first (best value).
   cands.sort((a, b) => (b.value - a.value) || (b.p - a.p));
@@ -6145,6 +6181,7 @@ function pickTag(r) {{
     tier === 3 ? 'Lower confidence: this tier takes Overs and Unders in turns on purpose, so some of it has little test evidence behind it.' : null,
     e.anticipated !== null && e.anticipated !== undefined ? `Projects ${{r1(e.anticipated)}} vs the ${{b.line}} line` : null,
     last.length ? `Last ${{last.length}} games: ${{last.join(', ')}}` : null,
+    c.steady ? `${{c.steady.starter ? 'Starter' : 'Backup-level volume'}}, ${{c.steady.steady ? 'steady' : 'volatile'}}: averages ${{r1(c.steady.avg)}} a game, swings (CV) ${{c.steady.cv.toFixed(2)}}` : null,
     e.must_why ? e.must_why.join('\\n') : null,
     `Why it's here: ${{PICK_GROUPS[c.g]}} -- that kind of pick went ${{c.rec.w}}-${{c.rec.l}} in our graded weeks.`,
   ].filter(Boolean);
