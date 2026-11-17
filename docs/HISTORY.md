@@ -3718,3 +3718,17 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
   - Overs for Next come from the evidence groups first, then streak 3-stars and projection-over (price -130+, yardage line 10+).
 - **Lesson:** he had said it four times; each answer defended the tests instead of changing the list. When he repeats a preference, change it and report the cost.
 
+## Week 10 look-back, and the board goes back to the original look (2026-11-17)
+- **Week 10** (first week none of the list rules were tuned on; graded at the board's line):
+  - Ranked list 7-14 (33%): Best 2-2, Next 3-5, More 2-7 (More Overs 1-6).
+  - By group at the closing line: must_market 3-8, streak3 3-9, target3 1-3, proj_over 39-39, proj_under 29-23, priced 13-10.
+  - 💡 rows 21-11 (2-star near miss 17-8); ❓ 32-54; blocked "not a top-10 matchup" rows 16-33.
+  - Ladder board picks went off 18% vs 12% for all eligible rows. Look flags 30-34.
+  - MUST BETs since Week 7 (the weeks they weren't fit on): 29-22 (57%), about break-even at their prices.
+- **Trevor:** "I was doing way better before the changes we made last week. But what was happening was I was doing too much analysis of my own. So we tried to let you do more decision making and it sucked big time."
+- **Agreed direction:** he decides, and the board makes his analysis faster (a candidate queue shaped like his winning bets, a one-screen player summary, trap warnings). None of the three is built yet.
+- **Done now** (his ask: "revert visually ... include the stuff I entered last week tracking like why I took the bets"):
+  - Signal emojis, 📅 and the script tag are back in the signal column, with "Hide ❓ rows" and the plain signal sort.
+  - Best / Next / More tags, 👀 Look flags and the two list checkboxes are off the page. The code stays; alerts still use the Best 3.
+  - His reasons show as 📝 next to the mark (tap to edit) and as a "Why:" line in My Bets.
+

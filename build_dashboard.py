@@ -936,6 +936,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .cov-lowman {{ background: rgba(210,153,34,0.18); color:#e0b84a; }}
   .cov-review {{ background: rgba(191,133,255,0.18); color:#c893ff; margin-left:0; }}
   .pick-side {{ font-size:13px; margin-right:6px; }}
+  .why-chip {{ cursor:pointer; font-size:13px; }}
+  .why-chip.why-empty {{ opacity:0.35; }}
   .cov-more {{ background: rgba(154,161,172,0.16); color: var(--muted); margin-left:0; }}
   .cov-look {{ background: rgba(210,153,34,0.18); color: var(--amber); margin-left:0; }}
   .mustbet-tag {{ background: rgba(255,215,0,0.20); color:#ffd54a; margin-left:0; font-size:11px; letter-spacing:0.02em; }}
@@ -1004,11 +1006,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;">
       <input type="checkbox" id="hideMarkedX" checked> Hide &#10060; rows
     </label>
-    <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="Only show the ranked picks (Best 3, Next 10, More 17).">
-      <input type="checkbox" id="reviewOnlyFilter"> &#128269; Best bets only
-    </label>
-    <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="Keep only starters (real-role volume) whose game-to-game swings are modest (coefficient of variation 0.5 or less over his last 8 games) in the Best / Next / More picks. Untick to see the picks with backups and wild props included.">
-      <input type="checkbox" id="steadyFilter" checked> &#128737; Steady starters only
+    <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="Hide the &#10067; 'worth a look' rows (&#128161; rows stay).">
+      <input type="checkbox" id="hideReview"> Hide &#10067; rows
     </label>
     <button type="button" id="resetColsBtn" class="pos-btn" style="margin-left:16px;" title="Columns: drag a header to move it, drag the thin bar on a header's right edge to resize it. Your layout is saved in this browser. This puts every column back to its original spot and width.">&#8634; Reset columns</button>
     <label class="muted" style="margin-left:16px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="Only show this week's &#129692; Ladder board players (the ones likeliest to go off -- see the Ladder board button).">
@@ -1051,7 +1050,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <th data-key="anticipated" title="Team Share % x Opp Allows -- a projection of this player's stat based on their typical share of team production against what the upcoming opponent allows to this position">Anticipated</th>
         <th data-key="edge" title="Recent Avg minus the most advantageous available line for whichever side (Over/Under) Recent Avg favors -- the lowest DK/FanDuel/BetMGM line for an Over, the highest for an Under. That book is highlighted in green below. Falls back to the consensus line if Recent Avg ties it exactly.">Edge</th>
         <th data-key="anc_edge" title="Anticipated minus that same shopped line -- Edge and Anc. Edge are graded against the same book/number, since they're two ways of sizing up one candidate bet.">Anc. Edge</th>
-        <th data-key="signal_rank" title="The best 3, then the next 10, then 17 more (Overs and Unders balanced), ranked">&#128269; Best bets</th>
+        <th data-key="signal_rank" title="The board's signal for this row: &#11088; MUST BET, &#128293;&#128293;&#128293; / &#129482;&#129482;&#129482; (3-star Over / Under), &#128161; worth a closer look, &#10067; has a flag. Hover a signal for why. Default sort: strongest first.">&#128293;/&#129482;/&#11088;</th>
         <th data-key="win_edge" class="win-col" title="Estimated chance to win the better side (O/U), then the break-even % its best price needs, then the edge (estimate minus break-even). Built from the market's juice-free odds, a projection model and his season hit rate. Hover a cell for the breakdown. Sort by this to see the best values first. An estimate, not proven yet.">Win % / Need / Edge</th>
         <th data-key="draftkings_line">DraftKings</th>
         <th data-key="fanduel_line">FanDuel</th>
@@ -1092,8 +1091,8 @@ let activePos = "ALL";
 let activeStat = "ALL";
 let activeGame = "ALL";
 let hideMarkedX = true; // starts ticked on every load (2026-10-16, per Trevor)
-let reviewOnly = false;
-let steadyOnly = true;
+let hideReview = false;
+const steadyOnly = true; // still used by the phone-alert list (topPicks); its checkbox was removed 2026-11-17
 let ladderOnly = false;
 let altOnly = false; // ⬆ Alt lines only (2026-10-30, per Trevor: "make a filter for the alts. would be a fun thing to parlay")
 let weakMatchupOnly = false;
@@ -2068,7 +2067,8 @@ function openMyBetsModal() {{
       const m = b.meta || parseBetKey(x.key);
       const opp = m.opp ? (m.at === true ? ' @' : (m.at === false ? ' vs ' : ' vs ')) + m.opp : '';
       what = `<strong>${{escapeHtml(m.player)}}</strong> <span class="muted">${{escapeHtml(m.team)}}${{escapeHtml(opp)}}</span> &middot; ${{escapeHtml(m.stat_label || statLabelFor(m.stat_col))}}` +
-        (x.kick ? `<div class="muted" style="font-size:10px;">${{fmtKickoff(x.kick)}} ${{gsLinkForTeam(m.team, x.week, 'Game script')}}</div>` : (gsLinkForTeam(m.team, x.week) ? `<div style="font-size:10px;">${{gsLinkForTeam(m.team, x.week, 'Game script')}}</div>` : ''));
+        (x.kick ? `<div class="muted" style="font-size:10px;">${{fmtKickoff(x.kick)}} ${{gsLinkForTeam(m.team, x.week, 'Game script')}}</div>` : (gsLinkForTeam(m.team, x.week) ? `<div style="font-size:10px;">${{gsLinkForTeam(m.team, x.week, 'Game script')}}</div>` : '')) +
+        (whyLine(x.key) ? `<div class="muted" style="font-size:11px; white-space:normal;">&#128221; Why: ${{escapeHtml(whyLine(x.key))}}</div>` : '');
     }}
     const sideSel = x.manual ? '<span class="muted">-</span>' :
       `<select class="bet-field" data-field="side">${{resOpt(b.side, '', 'O/U')}}${{resOpt(b.side, 'over', 'Over')}}${{resOpt(b.side, 'under', 'Under')}}</select>`;
@@ -2292,6 +2292,35 @@ function openReasonPicker(key, kind) {{
   if (box) box.focus();
 }}
 function openPassReason(key) {{ openReasonPicker(key, 'pass'); }}
+// What he entered for a marked row (2026-11-17, per Trevor: "can we include
+// the stuff I entered last week tracking like why I took the bets?").
+function whyInfo(key) {{
+  const mark = MARKS[key];
+  if (mark !== 'bet' && mark !== 'pass') return null;
+  const tagKey = MARKS[(mark === 'bet' ? 'like|' : 'why|') + key];
+  const hit = (mark === 'bet' ? BET_REASONS : PASS_REASONS).find(([v]) => v === tagKey);
+  return {{ mark, tag: hit ? hit[1] : '', note: noteText(key) }};
+}}
+function whyLine(key) {{
+  const w = whyInfo(key);
+  if (!w || (!w.tag && !w.note)) return '';
+  return [w.tag, w.note ? '"' + w.note + '"' : ''].filter(Boolean).join(' -- ');
+}}
+// 📝 next to the mark: filled when a reason is saved, faint when not. Tap to add or change it.
+function whyChip(key) {{
+  const w = whyInfo(key);
+  if (!w) return '';
+  const line = whyLine(key);
+  const title = line ? `${{w.mark === 'bet' ? 'Why you bet it' : 'Why you passed'}}: ${{line}}\\n(tap to change)` : `No reason saved yet -- tap to say why you ${{w.mark === 'bet' ? 'bet it' : 'passed'}}`;
+  return ` <span class="why-chip${{line ? '' : ' why-empty'}}" data-why-key="${{escapeHtml(key)}}" data-why-kind="${{w.mark}}" title="${{escapeHtml(title)}}">&#128221;</span>`;
+}}
+document.addEventListener('click', e => {{
+  const c = e.target.closest('.why-chip');
+  if (!c) return;
+  e.stopPropagation();
+  openReasonPicker(c.dataset.whyKey, c.dataset.whyKind);
+}}, true);
+
 document.addEventListener('click', e => {{
   const b = e.target.closest('.reason-btn');
   if (!b) return;
@@ -4385,50 +4414,27 @@ function render() {{
       const e = enrichRow(r, selectedWeeks, defCache);
       // Mark column sort (added 2026-09-29): ✅ bets on top, then 🌕, unmarked, ❌.
       e.mark_rank = {{ bet: 3, watch: 2, pass: 0 }}[MARKS[markKey(r)]] ?? 1;
-      // A Review pick's book cells show the Review bet's side, line and best book.
-      const pf = pickFor(e);
-      // (bet.book is the short label, e.g. 'DK'; the highlight needs the book key.)
-      if (pf) {{
-        const bk = (BET_BOOKS.find(([k, label]) => label === pf.c.bet.book) || [])[0] || null;
-        Object.assign(e, {{ show_side: pf.c.bet.side, show_best_book: bk, show_best_line: pf.c.bet.line }});
-      }}
       return e;
     }});
-  // 👀 Look flags apply only while one game is selected; their book cells show the flagged side.
+  // 2026-11-17 (per Trevor: "I liked how the data showed up before. Maybe we
+  // can revert visually"): the board is the original one again -- signal
+  // emojis, no Best/Next/More tags, no 👀 flags. The ranked list (topPicks)
+  // still exists underneath for the phone alerts and the weekly grading.
   _gameLooks = new Map();
-  if (activeGame !== 'ALL') {{
-    _gameLooks = computeGameLooks(enriched.filter(e => gameKey(e) === activeGame));
-    for (const e of enriched) {{
-      const l = _gameLooks.get(markKey(e));
-      if (!l || !l.bet) continue;
-      const bk = (BET_BOOKS.find(([k, label]) => label === l.bet.book) || [])[0] || null;
-      Object.assign(e, {{ show_side: l.bet.side, show_best_book: bk, show_best_line: l.bet.line }});
-    }}
-  }}
   let rows = enriched
     .filter(r =>
       (activePos === 'ALL' || r.position === activePos) &&
       (activeStat === 'ALL' || r.stat_label === activeStat) &&
       (activeGame === 'ALL' || gameKey(r) === activeGame) &&
       (!hideMarkedX || MARKS[markKey(r)] !== 'pass') &&
-      (!reviewOnly || altOnly || pickFor(r) || lookFor(r)) && // Best bets only (the Alt lines box overrides it; 👀 flags stay while a game is selected)
+      (!hideReview || !r.needs_review || r.idea_reason || altOnly) && // Hide ❓ keeps 💡 (and alt-line rows when that filter is on)
       (!altOnly || r.alt_line) &&
       (!ladderOnly || ladderPick(r) !== null) &&
       (!weakMatchupOnly || isWeakMatchup(r)) &&
       (!strongMatchupOnly || isStrongMatchup(r)) &&
       (!q || r.player.toLowerCase().includes(q) || r.team.toLowerCase().includes(q) || r.opponent.toLowerCase().includes(q))
     );
-  // Default sort: the picks (Best, Next, More) first, in their order, so the
-  // top of the board IS the list of bets we think are good (2026-11-10).
-  const pickOrder = {{}};
-  if (sortKey === 'signal_rank') {{
-    const tp = topPicks();
-    tp.top.concat(tp.review, tp.more).forEach((c, i) => {{ pickOrder[markKey(c.e)] = i + 1; }});
-    _gameLooks.forEach((l, k) => {{ pickOrder[k] = 1000 + l.rank; }}); // 👀 flags right after the ranked picks
-  }}
   rows.sort((a, b) => {{
-    const pa = pickOrder[markKey(a)] || Infinity, pb = pickOrder[markKey(b)] || Infinity;
-    if (pa !== pb) return pa - pb;
     let av = a[sortKey], bv = b[sortKey];
     if (av === null || av === undefined) av = -Infinity;
     if (bv === null || bv === undefined) bv = -Infinity;
@@ -4454,7 +4460,7 @@ function render() {{
     const idClass = sameAsPrev ? 'grouped-cell' : '';
     html += `
     <tr class="${{groupingActive && isLastOfGroup ? 'group-end' : ''}}" data-player="${{escapeHtml(r.player)}}">
-      <td>${{markSelect(r)}}${{betSlip(r)}}</td>
+      <td>${{markSelect(r)}}${{whyChip(markKey(r))}}${{betSlip(r)}}</td>
       <td class="${{idClass}} player-cell">${{idCell}}</td>
       <td class="${{idClass}}">${{sameAsPrev ? '' : r.position}}</td>
       <td class="${{idClass}}">${{sameAsPrev ? '' : r.team}}</td>
@@ -4469,7 +4475,7 @@ function render() {{
       <td>${{fmt(r.anticipated)}}</td>
       <td class="${{edgeClass(r.edge_pct)}}">${{fmt(r.edge)}}</td>
       <td class="${{edgeClass(r.anc_edge_pct)}}">${{fmt(r.anc_edge)}}</td>
-      <td>${{pickTag(r)}}${{pickFlags(r)}}${{lookTag(r)}}</td>
+      <td>${{signalEmoji(r)}}${{fullYearTag(r)}}${{scriptTag(r)}}</td>
       <td class="win-col">${{winCellHtml(r)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.draftkings_line, bookCellPrice(r, 'draftkings'), r.show_side || r.direction)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.fanduel_line, bookCellPrice(r, 'fanduel'), r.show_side || r.direction)}}</td>
@@ -4517,7 +4523,7 @@ function secondLookHtml(playerRows) {{
     const side = t.lean === 'over' ? 'Over' : 'Under';
     const items = t.factors.map(f => `<li class="${{f.effect > 0 ? 'edge-pos' : f.effect < 0 ? 'edge-neg' : 'muted'}}"><span style="display:inline-block;width:14px;">${{f.effect > 0 ? '&#10004;' : f.effect < 0 ? '&#10008;' : '&bull;'}}</span><strong>${{escapeHtml(f.name)}}</strong> <span class="sl-text">${{escapeHtml(f.text)}}</span></li>`).join('');
     const cautions = t.cautions.length ? `<li class="wind-med"><span style="display:inline-block;width:14px;">&#9888;</span>${{escapeHtml(t.cautions.join('; '))}}</li>` : '';
-    html += `<div class="sl-block"><div class="sl-head">${{escapeHtml(r.stat_label)}} &middot; ${{side}} ${{t.line}} ${{pickTag(r)}} <span class="muted">${{t.pros}} for / ${{t.cons}} against</span></div><ul class="sl-list">${{items}}${{cautions}}</ul></div>`;
+    html += `<div class="sl-block"><div class="sl-head">${{escapeHtml(r.stat_label)}} &middot; ${{side}} ${{t.line}} ${{signalEmoji(r)}} <span class="muted">${{t.pros}} for / ${{t.cons}} against</span></div><ul class="sl-list">${{items}}${{cautions}}</ul></div>`;
   }}
   return `<h3 class="modal-section-title">Second look (context, not a pick)</h3>
     <div class="modal-note">A checklist on the side each signal points to. In the Week 3 backtest the combined count did <em>not</em> predict results; only game script held up (shown as &#10004;/&#9888; script in the table). Use it to spot red flags -- low volume, thin sample, a spread that works against you.</div>
@@ -4606,7 +4612,7 @@ function openPlayerModal(playerName) {{
   for (const r of playerRows) {{
     summaryHtml += `
     <tr>
-      <td>${{markSelect(r)}}${{betSlip(r)}}</td>
+      <td>${{markSelect(r)}}${{whyChip(markKey(r))}}${{betSlip(r)}}</td>
       <td>${{r.stat_label}}${{impactTags(r)}}</td>
       <td>${{fmt(r.recent_avg)}}</td>
       <td>${{fmt(r.def_avg_allowed)}}</td>
@@ -4617,7 +4623,7 @@ function openPlayerModal(playerName) {{
       <td>${{fmt(r.anticipated)}}</td>
       <td class="${{edgeClass(r.edge_pct)}}">${{fmt(r.edge)}}</td>
       <td class="${{edgeClass(r.anc_edge_pct)}}">${{fmt(r.anc_edge)}}</td>
-      <td>${{pickTag(r)}}${{pickFlags(r)}}${{lookTag(r)}}</td>
+      <td>${{signalEmoji(r)}}${{fullYearTag(r)}}${{scriptTag(r)}}</td>
       <td class="win-col">${{winCellHtml(r)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.draftkings_line, bookCellPrice(r, 'draftkings'), r.show_side || r.direction)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.fanduel_line, bookCellPrice(r, 'fanduel'), r.show_side || r.direction)}}</td>
@@ -4987,8 +4993,7 @@ document.getElementById('tbody').addEventListener('change', onMarkChange);
 const FILTER_STORAGE_KEY = 'nfl_prop_dashboard_filters_v1';
 const FILTER_BOXES = {{
   hideMarkedX: v => {{ hideMarkedX = v; }},
-  reviewOnlyFilter: v => {{ reviewOnly = v; }},
-  steadyFilter: v => {{ steadyOnly = v; }},
+  hideReview: v => {{ hideReview = v; }},
   ladderOnlyFilter: v => {{ ladderOnly = v; }},
   altOnlyFilter: v => {{ altOnly = v; }},
   weakMatchupFilter: v => {{ weakMatchupOnly = v; }},
@@ -5012,12 +5017,8 @@ function saveFilterBoxes() {{
   }}
 }})();
 
-document.getElementById('steadyFilter').addEventListener('change', (e) => {{
-  steadyOnly = e.target.checked;
-  render();
-}});
-document.getElementById('reviewOnlyFilter').addEventListener('change', (e) => {{
-  reviewOnly = e.target.checked;
+document.getElementById('hideReview').addEventListener('change', (e) => {{
+  hideReview = e.target.checked;
   render();
 }});
 document.getElementById('hideMarkedX').addEventListener('change', (e) => {{
@@ -5542,11 +5543,11 @@ function gameScript(key, weeksIn) {{
   return {{ g, weeks, base, A, H, fav, dog, mag, sp, total, implied, pHome, totalDelta, pace, shape, headline, flow, statTotal, edges, wx, situ, injA, injH, props, lgPass, prof }};
 }}
 
-// This game's 🔍 Review picks, in list order (2026-11-10: the board only
-// shows the Review list now).
 function gsBoardRows(key) {{
-  const tp = topPicks();
-  return tp.top.concat(tp.review, tp.more).filter(c => gameKey(c.e) === key).map(c => c.e);
+  const defCache = {{}};
+  return ROWS.filter(r => gameKey(r) === key).map(r => enrichRow(r, selectedWeeks, defCache))
+    .filter(e => e.hot_level > 0 || e.cold_level > 0 || e.needs_review)
+    .sort((a, b) => (b.signal_rank || 0) - (a.signal_rank || 0)).slice(0, 18);
 }}
 function gsDirClass(d) {{ return d > 0 ? 'gs-good' : d < 0 ? 'gs-bad' : ''; }}
 function gsList(items) {{
@@ -5597,13 +5598,12 @@ function gameScriptHtml(key) {{
   const injNotes = s.injA.notes.concat(s.injH.notes);
 
   const board = gsBoardRows(key);
-  const boardHtml = board.length ? `<table class="modal-table gs-table"><thead><tr><th>Player</th><th>Stat</th><th>Bet</th><th>Review</th><th>Flags</th><th>Mark</th></tr></thead><tbody>`
+  const boardHtml = board.length ? `<table class="modal-table gs-table"><thead><tr><th>Player</th><th>Stat</th><th>Side</th><th>Signal</th><th>Script</th><th>Mark</th></tr></thead><tbody>`
     + board.map(e => {{
-      const pf = pickFor(e), b = pf ? pf.c.bet : null;
-      const side = b ? (b.side === 'over' ? 'Over' : 'Under') : '-';
-      const line = b ? b.line : e.vegas_line;
-      return `<tr><td>${{gsPlayerLink(e.player)}} <span class="muted">${{e.team}}</span></td><td>${{escapeHtml(e.stat_label)}}</td><td>${{side}} ${{line === null || line === undefined ? '' : line}}</td><td>${{pickTag(e)}}</td><td>${{pickFlags(e) || '<span class="muted">-</span>'}}</td><td>${{MARK_EMOJI[MARKS[markKey(e)]] || ''}}</td></tr>`;
-    }}).join('') + '</tbody></table>' : '<div class="muted">No Review picks in this game.</div>';
+      const side = e.hot_level > 0 ? 'Over' : e.cold_level > 0 ? 'Under' : (e.tiebreak ? (e.tiebreak.lean === 'over' ? 'Over' : 'Under') : '-');
+      const line = e.tiebreak && e.tiebreak.line !== undefined ? e.tiebreak.line : e.vegas_line;
+      return `<tr><td>${{gsPlayerLink(e.player)}} <span class="muted">${{e.team}}</span></td><td>${{escapeHtml(e.stat_label)}}</td><td>${{side}} ${{line === null || line === undefined ? '' : line}}</td><td>${{signalEmoji(e)}}</td><td>${{scriptTag(e) || '<span class="muted">-</span>'}}</td><td>${{MARK_EMOJI[MARKS[markKey(e)]] || ''}}</td></tr>`;
+    }}).join('') + '</tbody></table>' : '<div class="muted">No signalled rows in this game for the selected weeks.</div>';
 
   const myBets = allBets().filter(x => !x.manual && x.week === WEEK && x.b.meta && (x.b.meta.team === g.home || x.b.meta.team === g.away));
   const betsHtml = myBets.length ? '<ul class="gs-list">' + myBets.map(x => {{
@@ -5864,14 +5864,10 @@ function myRulesHtml() {{
   const n = RULE_NUMS;
   const li = s => `<li style="margin:3px 0;">${{s}}</li>`;
   const sec = (title, items) => `<h3 class="modal-section-title">${{title}}</h3><ul style="margin:4px 0 10px 18px; padding:0;">${{items.map(li).join('')}}</ul>`;
-  return sec('The board (2026-11-10)', [
-      '<b>&#128269; Best bets</b> is the only pick label on the board now, in three tiers: <b>&#11088; Best 3</b> (gold; the strict MUST BET picks, one per game, never three of the same side, and the only phone alerts), <b>&#128269; Next 10</b> and <b>&#10133; More 17</b> (in both, Overs and Unders take turns, best of each side first, so neither is mostly Unders; the Overs include pick types with little or no test edge, only at -130 or better, so some of these are lower confidence). The streak tiers below (&#128293;/&#129482;/&#11088;/&#128161;/&#10067;) still run underneath -- MUST BETs and &#127919; 3-stars feed the lists -- but they are no longer shown. Flags on a pick: &#128197; the full season agrees with the bet, &#10004;/&#9888; script = the game script backs it / argues against it. Next to the player name: &#127919; outlier defense, &#11014; alt-line idea, &#129692; ladder board, &#129657; injuries.',
-    ]) + sec('&#128737; Steady starters (2026-11-13)', [
-      'The Next / More picks only include <b>starters</b> (his season average is a real-role volume: 3.5+ receptions, 35+ rush or receiving yards, 9+ carries, 150+ pass yards, and so on) whose game-to-game swings are modest (coefficient of variation 0.5 or less over his last 8 games). That keeps out backups and the wild props (interceptions, one-catch lines, big-play yardage). The <b>Best 3</b> (the phone alerts) are left alone: on the Weeks 4-9 tests the filter would have removed 13 of them and all 13 won, because the heavy price already shows the books agree. It\u2019s the <b>&#128737; Steady starters only</b> box next to Best bets only; untick it to see the unfiltered list. On those tests the filtered picks (without MUST BETs) went about 60-70%.',
-    ]) + sec('&#128064; Look flags (2026-11-12)', [
-      'When you filter to ONE game, lines that are not in the ranked picks but have a reason to be checked get a <b>&#128064; Look</b> flag (with &#9650;/&#9660; for the side it points to), listed right after that game\u2019s ranked picks. It needs at least one strong reason: a &#127919; outlier defense, the &#129692; ladder board, a &#11014; alt-line idea, a key injury that helps or hurts him, a streak 3-star that did not rank, or a strong streak the board blocked (role change, blowout rule, matchup history). Game script, full-season agreement and &#128161; only add weight. At most 6 per game, one per player, priced -170 or better. Hover for the reasons, including any that pull the other way. These flags are NOT picks: lines flagged like this went 153-174 (47%) on Weeks 4-9, no better than a coin flip, so use them to know where to dig (news, your own read), not as bets. They never buzz your phone.',
+  return sec('The board (2026-11-17)', [
+      'The board is back to the original look: the signal column shows <b>&#11088; MUST BET</b>, <b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b>, <b>&#128161;</b> and <b>&#10067;</b>, with &#128197; (the full season agrees) and the game-script check next to it. You make the calls; the board lays out the information. The Best / Next / More tags, the &#128064; Look flags and the Steady-starters box (Nov 10-13) were taken off after Week 10, when that ranked list went 7-14. Phone alerts still come from the three best-priced MUST BETs.',
     ]) + sec('Your reasons (2026-11-11)', [
-      'When you mark a row &#10060; Pass or &#9989; Bet, a box opens: say why in your own words, tap a tag, or both. It is saved with your marks (synced to your account, included in the My Bets backup) together with what the board said at that moment. Each week you paste the backup to me: I grade every reason against what actually happened (would the board\u2019s side have won?) and turn the ones that keep being right into rules. Nothing changes the model by itself.',
+      'A &#128221; next to a marked row (and a Why line in My Bets) shows what you entered; tap the &#128221; to change it. When you mark a row &#10060; Pass or &#9989; Bet, a box opens: say why in your own words, tap a tag, or both. It is saved with your marks (synced to your account, included in the My Bets backup) together with what the board said at that moment. Each week you paste the backup to me: I grade every reason against what actually happened (would the board\u2019s side have won?) and turn the ones that keep being right into rules. Nothing changes the model by itself.',
     ]) + sec('The groups', [
       '<b>&#11088; MUST BET</b> -- a streak pick the books agree with: he and the defense have been on that side (any streak level), and the books charge extra juice on it, between ' + (MAX_JUICE_PRICE - 1) + ' and ' + MUST_JUICE_MIN + '. In the Weeks 4-9 study those went 65%, and made money up to -170 (not beyond). No role change or lead-back blowout. These are the Top 3 candidates and the phone alerts. A plain streak at a cheap price is only a 3-star (it went 36-29).',
       '<b>&#11088; / &#128269; / &#10133; tags:</b> the ' + LIST_SIZE + ' ranked picks, marked right on the board in the Best bets column (hover for the bet, his projection, his last games and why). Best 3 and Next 10 come only from the groups that held up when tested on weeks they weren\u2019t built from: MUST BETs first, then 📏 projection-under picks (Receptions and Rush Yds only, not TDs/INTs) and 🎯 3-stars -- best group first, and inside a group the strongest pick first (least juice / biggest gap between projection and line). More 17 alternates the best remaining Over and the best remaining Under; Overs there come from streak 3-stars, 🎯 3-stars and projection-over picks (about 50-55% in the tests), priced -130 or better. One pick per player. With the default sort, the picks sit at the top of the board in order.',
