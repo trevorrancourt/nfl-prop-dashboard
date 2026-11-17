@@ -190,9 +190,19 @@ def probe_books(api_key, events):
         gh_annotate("warning", "Book probe", f"failed: {type(e).__name__}")
 
 
+# Sharp reference books (2026-11-17, per Trevor: "Try that with sharp price").
+# Pinnacle takes professional action and Novig / ProphetX are low-juice
+# exchanges, so their prices are the closest thing to "true" odds. They are
+# pulled in the same call (a bookmakers list of up to 10 costs the same as the
+# three board books alone -- checked with a live probe) but kept in their own
+# "sharp" list: the board's lines, consensus and prices still come only from
+# the books Trevor bets at.
+SHARP_BOOKS = ("pinnacle", "novig", "prophetx")
+
+
 def parse_event_odds(event_data):
     """Turn one event's raw bookmaker/market/outcome tree into
-    {player_name: {market_key: {consensus_point, books: [...]}}}"""
+    {player_name: {market_key: {consensus_point, books: [...], sharp: [...]}}}"""
     props = {}
     for bookmaker in event_data.get("bookmakers", []):
         book_key = bookmaker["key"]
@@ -203,9 +213,9 @@ def parse_event_odds(event_data):
                 if not player:
                     continue
                 entry = props.setdefault(player, {}).setdefault(
-                    market_key, {"books": []}
+                    market_key, {"books": [], "sharp": []}
                 )
-                entry["books"].append(
+                entry["sharp" if book_key in SHARP_BOOKS else "books"].append(
                     {
                         "bookmaker": book_key,
                         "side": outcome.get("name"),
@@ -213,6 +223,14 @@ def parse_event_odds(event_data):
                         "price": outcome.get("price"),
                     }
                 )
+    # A prop only a sharp book posts isn't something he can bet: leave it off
+    # so the board's player list and lines stay exactly as they were.
+    for player in list(props):
+        for market_key in list(props[player]):
+            if not props[player][market_key]["books"]:
+                del props[player][market_key]
+        if not props[player]:
+            del props[player]
     # compute a consensus line (median of points across books) per player/market,
     # plus a consensus price for each side (median of the Over prices, and
     # separately the Under prices, across books) -- used to check whether a
@@ -236,7 +254,7 @@ def main():
     parser.add_argument("--regions", default="us", help="Odds API regions (default: us)")
     parser.add_argument(
         "--bookmakers",
-        default="draftkings,fanduel,betmgm",
+        default="draftkings,fanduel,betmgm," + ",".join(SHARP_BOOKS),
         help="Comma-separated bookmaker keys, or 'all' to not filter",
     )
     args = parser.parse_args()
@@ -289,7 +307,7 @@ def main():
         per_game.append(f"{event['away_team'].split()[-1]}@{event['home_team'].split()[-1]} {len(props)}")
         for pname, mk in props.items():
             for entry in mk.values():
-                for b in entry["books"]:
+                for b in entry["books"] + entry.get("sharp", []):
                     per_book.setdefault(b["bookmaker"], set()).add(event["id"] + "|" + pname)
         event_summaries.append(
             {"event_id": event["id"], "matchup": label, "commence_time": event["commence_time"]}

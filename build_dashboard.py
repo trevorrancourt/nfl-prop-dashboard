@@ -101,6 +101,19 @@ STAT_MARKET_MAP = {
 }
 
 TRACKED_BOOKS = ["draftkings", "fanduel", "betmgm"]
+# Sharp reference books (see fetch_odds.SHARP_BOOKS): shown in the Sharp
+# column as information only, never part of the board's own line or signals.
+SHARP_BOOKS = ["pinnacle", "novig", "prophetx"]
+
+
+def sharp_quotes(market):
+    """[{book, line, over, under}] for each sharp book that posted this prop."""
+    out = []
+    for bk in SHARP_BOOKS:
+        point, over, under = book_line((market or {}).get("sharp") or [], bk)
+        if point is not None:
+            out.append({"book": bk, "line": point, "over": over, "under": under})
+    return out
 
 
 def book_line(books, bookmaker):
@@ -733,6 +746,7 @@ def build_rows(stats, odds_lookup, weather, injuries, injuries_by_team):
                     "betmgm_line": mgm_point,
                     "betmgm_over_price": mgm_over_price,
                     "betmgm_under_price": mgm_under_price,
+                    "sharp": sharp_quotes(market),
                     "weather": weather_text,
                     "wind_mph": wind_mph,
                     "weather_bad": weather_bad,
@@ -1055,6 +1069,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <th data-key="draftkings_line">DraftKings</th>
         <th data-key="fanduel_line">FanDuel</th>
         <th data-key="betmgm_line">BetMGM</th>
+        <th data-key="sharp_edge" title="What the sharp books say (Pinnacle, plus the Novig and ProphetX exchanges), with their juice removed: their line and the fair chance of the Over. An arrow and number appear when your best price at DraftKings / FanDuel / BetMGM beats that fair chance by 2 points or more (the arrow is the side). Information only: untested so far, never a signal or an alert. Click to sort by the biggest gap.">Sharp</th>
         <th data-key="wind_mph" title="Forecast at the home team's stadium for kickoff (domes/retractable roofs show 'Dome'). Red = bad weather: very cold, high wind, or a meaningful rain/snow chance. Amber = elevated wind, not yet bad enough to flag red.">Weather</th>
       </tr>
     </thead>
@@ -2290,6 +2305,61 @@ function openReasonPicker(key, kind) {{
   document.getElementById('playerModalOverlay').style.display = 'flex';
   const box = document.getElementById('reasonNote');
   if (box) box.focus();
+}}
+// ---- Sharp price (2026-11-17, per Trevor: "Try that with sharp price").
+// r.sharp = what Pinnacle and the Novig / ProphetX exchanges post for this
+// prop. With the juice taken out, their two prices give a fair chance for
+// each side. For each side, his best available number at DK / FD / MGM is
+// compared with that fair chance: same line -> fair chance minus the
+// break-even of his price; a BETTER line than the sharp book's (lower for an
+// Over, higher for an Under) -> at least that much; a worse line -> not
+// comparable. Information only: no history exists for these books, so it is
+// untested, and it never feeds a signal, the sort default or an alert.
+const SHARP_LABEL = {{ pinnacle: 'Pinnacle', novig: 'Novig', prophetx: 'ProphetX' }};
+const SHARP_EDGE_SHOW = 0.02;
+function sharpInfo(r) {{
+  const has = v => v !== null && v !== undefined;
+  const fair = (r.sharp || []).filter(q => has(q.line) && has(q.over) && has(q.under)).map(q => {{
+    const io = impliedProb(q.over), iu = impliedProb(q.under);
+    return {{ book: q.book, line: q.line, pOver: io / (io + iu) }};
+  }});
+  if (!fair.length) return null;
+  const sides = {{}};
+  for (const side of ['over', 'under']) {{
+    const m = bestMarketFor(r, side);
+    if (!m) continue;
+    const need = impliedProb(m.price);
+    const cmp = [];
+    for (const f of fair) {{
+      const p = side === 'over' ? f.pOver : 1 - f.pOver;
+      if (m.line === f.line) cmp.push({{ e: p - need, atLeast: false }});
+      else if (side === 'over' ? m.line < f.line : m.line > f.line) cmp.push({{ e: p - need, atLeast: true }});
+    }}
+    if (cmp.length) sides[side] = {{ m, need, edge: cmp.reduce((a, x) => a + x.e, 0) / cmp.length, atLeast: cmp.some(x => x.atLeast), n: cmp.length }};
+  }}
+  const best = ['over', 'under'].filter(sd => sides[sd]).sort((a, b) => sides[b].edge - sides[a].edge)[0] || null;
+  return {{ fair, sides, best }};
+}}
+function sharpCellHtml(r) {{
+  const si = r.sharp_info !== undefined ? r.sharp_info : sharpInfo(r);
+  if (!si) return '<span class="muted">-</span>';
+  const pct = v => Math.round(v * 100) + '%';
+  const pts = v => (v >= 0 ? '+' : '') + (Math.round(v * 1000) / 10).toFixed(1);
+  const lead = si.fair.find(f => f.book === 'pinnacle') || si.fair[0];
+  const tip = ['Sharp books, juice removed:']
+    .concat(si.fair.map(f => `- ${{SHARP_LABEL[f.book] || f.book}}: line ${{f.line}} -> Over ${{pct(f.pOver)}}, Under ${{pct(1 - f.pOver)}}`));
+  for (const side of ['over', 'under']) {{
+    const x = si.sides[side];
+    const m = bestMarketFor(r, side);
+    if (x && x.atLeast && x.edge < 0) tip.push(`Your best ${{side === 'over' ? 'Over' : 'Under'}}: ${{x.m.line}} at ${{x.m.price > 0 ? '+' : ''}}${{x.m.price}} (${{x.m.book}}) -- a better line than the sharp books, but it needs ${{pct(x.need)}}, more than their fair chance at their line, so it can't be judged from the price`);
+    else if (x) tip.push(`Your best ${{side === 'over' ? 'Over' : 'Under'}}: ${{x.m.line}} at ${{x.m.price > 0 ? '+' : ''}}${{x.m.price}} (${{x.m.book}}) needs ${{pct(x.need)}} -> ${{x.atLeast ? 'at least ' : ''}}${{pts(x.edge)}} points vs the sharp price${{x.atLeast ? ' (your line is better than theirs)' : ''}}`);
+    else if (m) tip.push(`Your best ${{side === 'over' ? 'Over' : 'Under'}}: ${{m.line}} at ${{m.price > 0 ? '+' : ''}}${{m.price}} (${{m.book}}) -- a worse line than the sharp books, so no comparison`);
+  }}
+  tip.push('Information only: this comparison is untested so far.');
+  const b = si.best ? si.sides[si.best] : null;
+  const flag = b && b.edge >= SHARP_EDGE_SHOW
+    ? ` <b class="edge-pos" style="white-space:nowrap;">${{si.best === 'over' ? '&#9650;' : '&#9660;'}} ${{b.atLeast ? '&ge;' : ''}}${{pts(b.edge)}}</b>` : '';
+  return `<span title="${{escapeHtml(tip.join('\\n'))}}" style="white-space:nowrap;">${{lead.line}} <span class="muted">O ${{pct(lead.pOver)}}</span>${{flag}}</span>`;
 }}
 function openPassReason(key) {{ openReasonPicker(key, 'pass'); }}
 // What he entered for a marked row (2026-11-17, per Trevor: "can we include
@@ -4414,6 +4484,8 @@ function render() {{
       const e = enrichRow(r, selectedWeeks, defCache);
       // Mark column sort (added 2026-09-29): ✅ bets on top, then 🌕, unmarked, ❌.
       e.mark_rank = {{ bet: 3, watch: 2, pass: 0 }}[MARKS[markKey(r)]] ?? 1;
+      e.sharp_info = sharpInfo(e);
+      e.sharp_edge = e.sharp_info && e.sharp_info.best ? e.sharp_info.sides[e.sharp_info.best].edge : null;
       return e;
     }});
   // 2026-11-17 (per Trevor: "I liked how the data showed up before. Maybe we
@@ -4480,6 +4552,7 @@ function render() {{
       <td class="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.draftkings_line, bookCellPrice(r, 'draftkings'), r.show_side || r.direction)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.fanduel_line, bookCellPrice(r, 'fanduel'), r.show_side || r.direction)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'betmgm' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'betmgm' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.betmgm_line, bookCellPrice(r, 'betmgm'), r.show_side || r.direction)}}</td>
+      <td>${{sharpCellHtml(r)}}</td>
       <td class="${{weatherClass(r)}}">${{r.weather ? r.weather : '<span class="muted">-</span>'}}</td>
     </tr>`;
   }}
@@ -4628,6 +4701,7 @@ function openPlayerModal(playerName) {{
       <td class="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'draftkings' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.draftkings_line, bookCellPrice(r, 'draftkings'), r.show_side || r.direction)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'fanduel' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.fanduel_line, bookCellPrice(r, 'fanduel'), r.show_side || r.direction)}}</td>
       <td class="${{(r.show_best_book || r.best_book) === 'betmgm' ? 'best-line' : ''}}" title="${{(r.show_best_book || r.best_book) === 'betmgm' ? 'Most advantageous line for this bet' : ''}}">${{fmtLine(r.betmgm_line, bookCellPrice(r, 'betmgm'), r.show_side || r.direction)}}</td>
+      <td>${{sharpCellHtml(r)}}</td>
     </tr>`;
   }}
 
@@ -4736,7 +4810,7 @@ function openPlayerModal(playerName) {{
       <thead><tr>
         <th>Mark</th><th>Stat</th><th>Avg (${{weeksLabel(selectedWeeks)}})</th><th>Opp Allows</th><th>Opp Rank</th><th>Hit</th><th>Opp Hit</th>
         <th>Team Share</th><th>Anticipated</th><th>Edge</th><th>Anc. Edge</th><th>&#128293;/&#129482;/&#11088;</th><th class="win-col">Win % / Need / Edge</th>
-        <th>DraftKings</th><th>FanDuel</th><th>BetMGM</th>
+        <th>DraftKings</th><th>FanDuel</th><th>BetMGM</th><th>Sharp</th>
       </tr></thead>
       <tbody>${{summaryHtml}}</tbody>
     </table>
@@ -5774,7 +5848,7 @@ function initColumns() {{
     const old = colState.order.length;
     for (let c = old; c < n; c++) colState.order.push(c);
     const added = n - old;
-    const insertAt = Array.from(headTr.children).findIndex(th => th.dataset.key === 'win_edge');
+    const insertAt = Array.from(headTr.children).findIndex(th => th.dataset.key === 'sharp_edge'); // the newest column (was 'win_edge' when that one was added)
     if (insertAt >= 0 && added === 1) {{
       colState.order = colState.order.slice(0, old).map(c => c >= insertAt ? c + 1 : c);
       const pos = colState.order.findIndex(c => c === insertAt + 1);
@@ -5866,6 +5940,8 @@ function myRulesHtml() {{
   const sec = (title, items) => `<h3 class="modal-section-title">${{title}}</h3><ul style="margin:4px 0 10px 18px; padding:0;">${{items.map(li).join('')}}</ul>`;
   return sec('The board (2026-11-17)', [
       'The board is back to the original look: the signal column shows <b>&#11088; MUST BET</b>, <b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b>, <b>&#128161;</b> and <b>&#10067;</b>, with &#128197; (the full season agrees) and the game-script check next to it. You make the calls; the board lays out the information. The Best / Next / More tags, the &#128064; Look flags and the Steady-starters box (Nov 10-13) were taken off after Week 10, when that ranked list went 7-14. Phone alerts still come from the three best-priced MUST BETs.',
+    ]) + sec('Sharp price (2026-11-17)', [
+      'The <b>Sharp</b> column shows what the sharp books say about a prop: Pinnacle (which takes professional bets) and the Novig and ProphetX exchanges, with their juice removed -- their line and the fair chance of the Over. When your best price at DraftKings, FanDuel or BetMGM beats that fair chance by 2 points or more, an arrow (&#9650; Over / &#9660; Under) and the gap show up; hover for the detail. If your line is better than the sharp line the gap reads as "at least". It costs no extra credits. <b>Information only</b>: there is no history for these books yet, so it is untested; it is not a signal and never buzzes your phone. It gets graded after two or three weeks.',
     ]) + sec('Your reasons (2026-11-11)', [
       'A &#128221; next to a marked row (and a Why line in My Bets) shows what you entered; tap the &#128221; to change it. When you mark a row &#10060; Pass or &#9989; Bet, a box opens: say why in your own words, tap a tag, or both. It is saved with your marks (synced to your account, included in the My Bets backup) together with what the board said at that moment. Each week you paste the backup to me: I grade every reason against what actually happened (would the board\u2019s side have won?) and turn the ones that keep being right into rules. Nothing changes the model by itself.',
     ]) + sec('The groups', [

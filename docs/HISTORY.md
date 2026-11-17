@@ -3758,3 +3758,13 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
 - Kalshi does list NFL player props on its own site (thresholds like 60+/70+ rush yards, anytime TD; coverage is partial), but would need its own API.
 - **Not built yet:** pulling the extra books, a sharp-price reference on the board, or anything from Kalshi. There is no history for these books, so nothing can be backtested until boards with them are archived.
 
+## Sharp column (2026-11-17)
+- Trevor: "Try that with sharp price."
+- **Pull:** `fetch_odds.py` now asks for Pinnacle, Novig and ProphetX along with DraftKings, FanDuel and BetMGM (six named books cost the same as three).
+  - The sharp books are stored separately (`sharp` per market), so the board's line, consensus and player list are unchanged.
+- **Board:** a "Sharp" column after BetMGM shows the sharp line and the fair Over chance (juice removed).
+  - ▲/▼ plus the gap appears when his best price at his own books beats the fair chance by 2 points or more.
+  - Same line is compared directly; a better line than theirs reads "at least"; a worse line is not compared.
+  - Sortable, and also in the player popup. Saved column layouts keep their order and get the column inserted.
+- **Status:** information only and untested, because no history exists for these books. Grade it after two or three weeks of archived boards.
+
