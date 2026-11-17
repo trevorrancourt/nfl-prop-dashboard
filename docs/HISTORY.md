@@ -3732,3 +3732,18 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
   - Best / Next / More tags, 👀 Look flags and the two list checkboxes are off the page. The code stays; alerts still use the Best 3.
   - His reasons show as 📝 next to the mark (tap to edit) and as a "Why:" line in My Bets.
 
+## Is consistency valuable? Can a line's move be called at the open? (2026-11-17)
+- **Trevor: "Look back last week and see if this consistency concept is even valuable."** Week 10 at the closing lines (579 props):
+  - His hit rate: players who had cleared the line in 75-100% of recent games went Over 40.4%; 0-33% went Over 52.6%.
+  - The defense's rate showed no pattern (37.7% to 60.9% across fifths).
+  - Raw strong streaks (MUST/3-star shown 8-20, blocked by other rules 25-40): 33-60 (35%).
+  - Weeks 7-9 had been flat (49.3% vs 50.4%). So no edge over four weeks, and negative last week.
+- **Trevor: "So basically we're missing what? Deeper matchup analysis?"** Told him matchup signals were tested and are priced in; what's missing is what the line doesn't contain: being early, role/usage changes, and price.
+- **"Track each line from the open and flag the ones likely to move" ("That's a cool idea")**, looked into with study section I on Weeks 7-10 (2,360 props, graded at the opening line and price):
+  - 27% rose, 25% fell, 48% didn't move. Over at every opening line: 1108-1240 (47%, ROI -10%).
+  - Hindsight ceiling: later rose → Over at open 349-286 (55%, +3%); later fell → Under at open 338-239 (59%, +9%); never moved → Over 520-616 (46%).
+  - Priced heavier at the open: Over 55%+ → 111-95 (54%, ROI -13%), line rose 21% / fell 0%; Under 45% or less → 173-106 (62%, ROI 0%).
+  - Books disagreed (402): Over at the low line 204-198, Under at the high line 215-187; 10%+ gap (87): Over at the low line 52-35, Under at the high line 43-44.
+  - Line vs his season average at the open, by fifths: far above → rose 17% / fell 32%, Over at open 45%; far below → rose 32% / fell 16%, Over at open 53%.
+  - **Conclusion:** the direction is partly predictable, but the payoff at the opening number is about break-even. Not worth a pick flag.
+
