@@ -144,6 +144,52 @@ def get_event_odds(api_key, event_id, markets, regions, bookmakers):
     return resp.json()
 
 
+def probe_books(api_key, events):
+    """One-off check, only while the file probe_books.flag exists in the repo
+    (2026-11-17, per Trevor: "Find out. Also, we could include kalshi too
+    probably"). Asks the feed for ONE game's player props in each region group
+    (US books, more US books, Europe incl. Pinnacle, exchanges incl. Kalshi,
+    DFS sites, Australia) and reports which books actually return props and
+    what each call cost. Then repeats with a 10-book list to see how a
+    bookmakers list is charged. Never blocks the build."""
+    if not (ROOT / "probe_books.flag").exists() or __import__("os").environ.get("NFL_DATA_DIR") or not events:
+        return
+    try:
+        ev = sorted(events, key=lambda e: e.get("commence_time") or "")[0]
+        url = f"{API_BASE}/sports/{SPORT}/events/{ev['id']}/odds"
+        markets = "player_rush_yds,player_reception_yds,player_receptions,player_pass_yds"
+        base = {"apiKey": api_key, "markets": markets, "oddsFormat": "american", "dateFormat": "iso"}
+        out = [f"{ev['away_team']} @ {ev['home_team']}, markets asked: {markets}"]
+        found = {}
+        for region in ("us", "us2", "eu", "us_ex", "us_dfs", "au"):
+            resp = get_with_retries(url, dict(base, regions=region))
+            cost = resp.headers.get("x-requests-last")
+            if resp.status_code != 200:
+                out.append(f"region {region}: error {resp.status_code} {resp.text[:160]} (cost {cost})")
+                continue
+            books = []
+            for bk in resp.json().get("bookmakers", []):
+                players = {o.get("description") for m in bk.get("markets", []) for o in m.get("outcomes", []) if o.get("description")}
+                mk = sorted(m["key"] for m in bk.get("markets", []))
+                found[bk["key"]] = len(players)
+                books.append(f"{bk['key']} ({bk.get('title')}): {len(players)} players, {len(mk)} markets")
+            out.append(f"region {region} (cost {cost}): " + ("; ".join(books) if books else "no book returned these props"))
+            time.sleep(0.4)
+        keep = ["draftkings", "fanduel", "betmgm"]
+        extra = [k for k, _ in sorted(found.items(), key=lambda kv: -kv[1]) if k not in keep][:7]
+        ten = keep + extra
+        resp = get_with_retries(url, dict(base, bookmakers=",".join(ten)))
+        out.append(f"bookmakers list of {len(ten)} ({', '.join(ten)}): status {resp.status_code}, cost {resp.headers.get('x-requests-last')}, "
+                   f"books returned {len(resp.json().get('bookmakers', [])) if resp.status_code == 200 else resp.text[:160]}")
+        print_quota(resp)
+        msg = "\n".join(out)
+        print(msg)
+        gh_annotate("notice", "Book probe", msg)
+    except Exception as e:  # a probe must never break the build
+        print(f"Book probe failed: {type(e).__name__}")
+        gh_annotate("warning", "Book probe", f"failed: {type(e).__name__}")
+
+
 def parse_event_odds(event_data):
     """Turn one event's raw bookmaker/market/outcome tree into
     {player_name: {market_key: {consensus_point, books: [...]}}}"""
@@ -220,6 +266,7 @@ def main():
         e for e in events if (e["away_team"], e["home_team"]) in target_games
     ]
     print(f"Found {len(matching)} of {len(target_games)} target games on the odds board.")
+    probe_books(api_key, matching)
 
     all_props = {}
     # Which game each player's lines came from (2026-11-10): the board only
