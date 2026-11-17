@@ -2357,8 +2357,10 @@ function sharpCellHtml(r) {{
   }}
   tip.push('Information only: this comparison is untested so far.');
   const b = si.best ? si.sides[si.best] : null;
+  // The arrow names its own bet (side, price, book): on a row whose signal
+  // points the other way, the book cells show the signal's side, not this one.
   const flag = b && b.edge >= SHARP_EDGE_SHOW
-    ? ` <b class="edge-pos" style="white-space:nowrap;">${{si.best === 'over' ? '&#9650;' : '&#9660;'}} ${{b.atLeast ? '&ge;' : ''}}${{pts(b.edge)}}</b>` : '';
+    ? ` <b class="edge-pos" style="white-space:nowrap;">${{si.best === 'over' ? '&#9650;' : '&#9660;'}} ${{b.atLeast ? '&ge;' : ''}}${{pts(b.edge)}}</b> <span class="muted" style="white-space:nowrap;">${{si.best === 'over' ? 'O' : 'U'}} ${{b.m.line}} ${{b.m.price > 0 ? '+' : ''}}${{b.m.price}} ${{b.m.book}}</span>` : '';
   return `<span title="${{escapeHtml(tip.join('\\n'))}}" style="white-space:nowrap;">${{lead.line}} <span class="muted">O ${{pct(lead.pOver)}}</span>${{flag}}</span>`;
 }}
 function openPassReason(key) {{ openReasonPicker(key, 'pass'); }}
@@ -4317,7 +4319,7 @@ function enrichRow(r, weeks, defCache) {{
   // that would have been a 2-star, or whose game script supports its side.
   // Not for ❓s caused by a role change or a matchup mismatch -- those are
   // the "don't trust it" ones.
-  let ideaReason = null;
+  let ideaReason = null, ideaSide = null; // ideaSide: the side a 💡 is about, when it isn't simply the streak's side
   const outlierDef = outlierDefense(r);
   // 🎯 + the line looks low (2026-10-30, per Trevor: "outliers should give
   // more of a bump when lines seem low"; he chose 💡 first, 3-star later
@@ -4330,6 +4332,7 @@ function enrichRow(r, weeks, defCache) {{
   }}
   if (backupBlowout) {{
     ideaReason = `blowout upside on the Over: ${{r.team}} favored by ${{tbTeamSpread(r, tbGame(r))}} -- an upside bet, not a consistency pick`;
+    ideaSide = 'over';
   }} else if (needsReview && !roleChanges.length && !mismatchFlag && !blowoutFlag) {{
     const why = [];
     if (demotedFrom === 2) why.push('high end: would have been a 2-star');
@@ -4339,6 +4342,7 @@ function enrichRow(r, weeks, defCache) {{
     if (why.length) ideaReason = why.join('; ');
   }} else if (outlierValue && !needsReview && !demoteWhy && hotLevel === 0 && coldLevel === 0 && !roleChanges.length && !mismatchFlag && !blowoutFlag) {{
     ideaReason = outlierValue;
+    ideaSide = outlierDef.side;
   }}
   // 🎯 line looks low → 3-star (2026-11-03, per Trevor: "let's try starting
   // with 1", after the Week 7-8 look-back: on the 🎯 side, rows with no
@@ -4386,7 +4390,12 @@ function enrichRow(r, weeks, defCache) {{
   // CONS_TIERS[1] (75%)+. A flag only -- grades still follow the selected
   // weeks. Skipped when the selection already is the full season.
   let fullYear = null;
-  const sigSide = hotLevel > 0 ? 'over' : (coldLevel > 0 ? 'under' : ((needsReview || ideaReason) && cons ? cons.side : null));
+  // The side this row is pointing at. A 💡 that names its own side (blowout
+  // upside on the Over, a 🎯 line that looks low/high) uses that side, not the
+  // streak's (2026-11-18, per Trevor: "some of the lines are giving me over
+  // emojis but showing the under lines").
+  const sigSide = hotLevel > 0 ? 'over' : (coldLevel > 0 ? 'under'
+    : ((ideaReason && ideaSide) ? ideaSide : ((needsReview || ideaReason) && cons ? cons.side : null)));
   if (sigSide && SIGNAL_MODE === 'consistency' && playedWeeksSelected(weeks) < WEEK - 1) {{
     const sw = seasonWeeks();
     const fy = consistencyStats(r, sw, deriveStats(r, sw).share, seasonDefRanks(key).ranks, sigSide);
@@ -4399,7 +4408,11 @@ function enrichRow(r, weeks, defCache) {{
   }}
 
   const win = winChance(r, weeks, anticipated);
-  const showSide = sigSide || (win ? win.side : derived.direction);
+  // With no signal on the row, the book cells follow the Sharp column's arrow
+  // when there is one, so a ▲ never sits next to Under prices.
+  const sharp = sharpInfo(r);
+  const sharpSide = sharp && sharp.best && sharp.sides[sharp.best].edge >= SHARP_EDGE_SHOW ? sharp.best : null;
+  const showSide = sigSide || sharpSide || (win ? win.side : derived.direction);
   const showPick = showSide ? pickBestLine(r, showSide) : null;
 
   return Object.assign({{}}, r, derived, {{
@@ -4407,6 +4420,8 @@ function enrichRow(r, weeks, defCache) {{
     win: win,
     win_edge: win ? win.edge : null,
     show_side: showSide,
+    sharp_info: sharp,
+    sharp_edge: sharp && sharp.best ? sharp.sides[sharp.best].edge : null,
     lookback: {{ raw: lbRaw, capped: lbCapped, mismatch: lbMismatch, priced: lbPriced, demotedFrom, blowout: blowoutFlag, backup: backupBlowout, role: roleChanges.length > 0 }},
     show_best_book: showPick ? showPick.book : null,
     show_best_line: showPick ? showPick.line : null,
@@ -4484,8 +4499,6 @@ function render() {{
       const e = enrichRow(r, selectedWeeks, defCache);
       // Mark column sort (added 2026-09-29): ✅ bets on top, then 🌕, unmarked, ❌.
       e.mark_rank = {{ bet: 3, watch: 2, pass: 0 }}[MARKS[markKey(r)]] ?? 1;
-      e.sharp_info = sharpInfo(e);
-      e.sharp_edge = e.sharp_info && e.sharp_info.best ? e.sharp_info.sides[e.sharp_info.best].edge : null;
       return e;
     }});
   // 2026-11-17 (per Trevor: "I liked how the data showed up before. Maybe we

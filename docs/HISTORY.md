@@ -3768,3 +3768,14 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
   - Sortable, and also in the player popup. Saved column layouts keep their order and get the column inserted.
 - **Status:** information only and untested, because no history exists for these books. Grade it after two or three weeks of archived boards.
 
+## Over signal next to Under prices (2026-11-18)
+- Trevor: "Some of the lines are giving me over emojis but showing the under lines".
+- **Not the ⭐/🔥/🧊 rows.** A headless scan of every row found their book cells always on the signal's side.
+- **Cause 1:** 💡 rows about an Over (backup-RB "blowout upside on the Over", 🎯 "line looks low") showed the streak's side, which was often the Under.
+- **Cause 2:** the new Sharp column's ▲/▼ pointed at one side while the book cells showed the board's fallback side.
+- **Fix:**
+  - The 💡's own side sets the row's side (`ideaSide`).
+  - With no signal, the cells follow the Sharp arrow.
+  - With a signal the other way, the Sharp cell names its own bet (side, line, price, book).
+- Re-scan after the fix: 0 mismatches across ⭐/🔥/🧊, 💡-Over and Sharp-arrow rows.
+
