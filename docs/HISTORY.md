@@ -3747,3 +3747,14 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
   - Line vs his season average at the open, by fifths: far above → rose 17% / fell 32%, Over at open 45%; far below → rose 32% / fell 16%, Over at open 53%.
   - **Conclusion:** the direction is partly predictable, but the payoff at the opening number is about break-even. Not worth a pick flag.
 
+## Sharp books and Kalshi: what the odds feed carries (2026-11-17)
+- Trevor asked what edges other bettors use, then "Whats a sharp book", then "Find out. Also, we could include kalshi too probably".
+- The feed's docs site is not reachable from the cloud session, and web search was inconclusive (one page says NFL props are "US and AU bookmakers only"). So a live probe ran once in Actions (`probe_books()`, gated by a `probe_books.flag` file, since removed).
+- **Result (Colts @ Texans; rush yds, rec yds, receptions, pass yds):**
+  - Pinnacle (`eu`) returned props for 11 players. The docs snippet was wrong for this feed.
+  - Exchanges (`us_ex`): Novig and ProphetX, 15 players each. Kalshi was not there.
+  - Other US books: BetOnline, BetRivers, Fanatics, Bovada, betPARX, Bally Bet, Fliff, theScore Bet, Hard Rock. DFS sites and five Australian books also returned props.
+  - Cost: 4 credits per region for 4 markets. A named list of 10 books across regions also cost 4, the same as today's 3-book pull.
+- Kalshi does list NFL player props on its own site (thresholds like 60+/70+ rush yards, anytime TD; coverage is partial), but would need its own API.
+- **Not built yet:** pulling the extra books, a sharp-price reference on the board, or anything from Kalshi. There is no history for these books, so nothing can be backtested until boards with them are archived.
+
