@@ -147,6 +147,105 @@ def logit_offset(X, y, off, l2=1.0, iters=50):
     return b, se, p
 
 
+def open_move_section(df):
+    """I. Can the move be called at the open? (2026-11-17, per Trevor: "That's a
+    cool idea" -- track each line from when it opens and flag the ones likely
+    to move.) Uses only what was known when the line first appeared: each
+    book's opening line and prices, and the player's averages (which don't
+    change during the week). Returns report lines."""
+    dec = lambda o: 1 + o / 100 if o > 0 else 1 + 100 / abs(o)
+
+    def tally(items):
+        n = len(items)
+        if not n:
+            return "n=0"
+        w = sum(1 for ok, _ in items if ok)
+        priced = [(ok, pc) for ok, pc in items if pc is not None]
+        roi = (sum((dec(pc) - 1) if ok else -1 for ok, pc in priced) / len(priced)) if priced else float("nan")
+        return f"n={n:4d}  {w}-{n - w} ({w / n:.0%}, ROI {roi:+.0%})"
+
+    def price_at(books, line, side):
+        i = 1 if side == "over" else 2
+        ps = [b[i] for b in books.values() if b and b[0] == line and b[i] is not None]
+        return max(ps) if ps else None
+
+    rows = []
+    for r in df.itertuples():
+        ob = r.open_books
+        if not isinstance(ob, dict) or r.open_line is None or (isinstance(r.open_line, float) and math.isnan(r.open_line)):
+            continue
+        lines = [b[0] for b in ob.values() if b and b[0] is not None]
+        if not lines:
+            continue
+        rows.append(dict(r=r, ol=r.open_line, cl=r.line, ob=ob, p=no_vig_over(ob, r.open_line), lo=min(lines), hi=max(lines), nbooks=len(lines),
+                         move=r.line - r.open_line))
+    L = ["\nI. CAN THE MOVE BE CALLED AT THE OPEN? (bets graded at the OPENING line and price; pushes at that line left out)"]
+    if not rows:
+        return L + ["  no opening lines saved"]
+    n = len(rows)
+    up = sum(1 for x in rows if x["move"] > 0); dn = sum(1 for x in rows if x["move"] < 0)
+    L.append(f"  {n} props with an opening line: {up / n:.0%} later rose, {dn / n:.0%} fell, {(n - up - dn) / n:.0%} did not move")
+
+    def bet(x, side, line=None, price_line=None):
+        line = x["ol"] if line is None else line
+        a = x["r"].actual
+        if a == line:
+            return None
+        return ((a > line) if side == "over" else (a < line), price_at(x["ob"], line if price_line is None else price_line, side))
+
+    both = [b for x in rows for b in [bet(x, "over")] if b]
+    L.append(f"  baseline, Over at every opening line: {tally(both)}")
+
+    L.append("  (1) Which side the books priced heavier at the open (their no-vig Over chance):")
+    for lo, hi, name in ((0.55, 9, "Over priced heavier (55%+)"), (0.52, 0.55, "slight Over lean"), (0.48, 0.52, "even"), (0.45, 0.48, "slight Under lean"), (-9, 0.45, "Under priced heavier (45% or less)")):
+        xs = [x for x in rows if x["p"] is not None and lo <= x["p"] < hi]
+        if not xs:
+            continue
+        rose = sum(1 for x in xs if x["move"] > 0) / len(xs); fell = sum(1 for x in xs if x["move"] < 0) / len(xs)
+        side = "over" if lo >= 0.52 else ("under" if hi <= 0.48 else None)
+        line = f"    {name:36s} n={len(xs):4d}  line rose {rose:.0%} / fell {fell:.0%}"
+        if side:
+            line += f"   betting the {side.upper()} at the open: {tally([b for x in xs for b in [bet(x, side)] if b])}"
+        L.append(line)
+
+    L.append("  (2) Books disagreed at the open (different lines):")
+    dis = [x for x in rows if x["hi"] > x["lo"] and x["nbooks"] >= 2]
+    if dis:
+        L.append(f"    {len(dis)} props; the closing line ended at or below the LOW book {sum(1 for x in dis if x['cl'] <= x['lo']) / len(dis):.0%}, at or above the HIGH book {sum(1 for x in dis if x['cl'] >= x['hi']) / len(dis):.0%}")
+        L.append(f"    Over at the lowest book's line:   {tally([b for x in dis for b in [bet(x, 'over', x['lo'])] if b])}")
+        L.append(f"    Under at the highest book's line: {tally([b for x in dis for b in [bet(x, 'under', x['hi'])] if b])}")
+        big = [x for x in dis if (x["hi"] - x["lo"]) / max(x["hi"], 1) >= 0.10]
+        L.append(f"    gap of 10%+ between books ({len(big)}): Over at the low line {tally([b for x in big for b in [bet(x, 'over', x['lo'])] if b])}; Under at the high line {tally([b for x in big for b in [bet(x, 'under', x['hi'])] if b])}")
+    else:
+        L.append("    none")
+
+    L.append("  (3) Where the opening line sat against his averages (lowest fifth = line far ABOVE his number):")
+    for col, name in (("season_avg", "season average"), ("sel_avg", "last-4 average"), ("ant", "board projection")):
+        xs = []
+        for x in rows:
+            v = getattr(x["r"], col, None)
+            if v is None or (isinstance(v, float) and math.isnan(v)) or not x["ol"]:
+                continue
+            xs.append(((v - x["ol"]) / x["ol"], x))
+        if len(xs) < 50:
+            continue
+        xs.sort(key=lambda t: t[0])
+        k = len(xs) // 5
+        parts = []
+        for q in range(5):
+            seg = [x for _, x in (xs[q * k:(q + 1) * k] if q < 4 else xs[4 * k:])]
+            rose = sum(1 for x in seg if x["move"] > 0) / len(seg); fell = sum(1 for x in seg if x["move"] < 0) / len(seg)
+            ov = [b for x in seg for b in [bet(x, "over")] if b]
+            parts.append(f"Q{q + 1} rose {rose:.0%}/fell {fell:.0%}, Over at open {sum(1 for ok, _ in ov if ok) / len(ov):.0%}")
+        L.append(f"    {name:16s} " + "; ".join(parts))
+
+    L.append("  (4) If you had known the move (hindsight ceiling):")
+    L.append(f"    line later rose -> Over at the open:  {tally([b for x in rows if x['move'] > 0 for b in [bet(x, 'over')] if b])}")
+    L.append(f"    line later fell -> Under at the open: {tally([b for x in rows if x['move'] < 0 for b in [bet(x, 'under')] if b])}")
+    L.append(f"    line never moved -> Over at the open: {tally([b for x in rows if x['move'] == 0 for b in [bet(x, 'over')] if b])}")
+    return L
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--template", required=True)
@@ -484,6 +583,8 @@ def main():
         f"{st} {tally([x for x in comf if base(x) and x['cush'] >= 0.15 and x['hits'] >= 3 and x['stat'] == st])}" for st in sorted({x['stat'] for x in comf})
         if len([x for x in comf if base(x) and x['cush'] >= 0.15 and x['hits'] >= 3 and x['stat'] == st]) >= 8))
     L.append(f"    for comparison, every prop-side priced -130 or better: {tally([x for x in comf if x['price'] >= -130])}")
+
+    L += open_move_section(df)
 
     text = "\n".join(L)
     print(text)
