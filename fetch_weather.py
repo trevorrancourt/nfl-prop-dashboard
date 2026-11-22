@@ -23,6 +23,7 @@ from pathlib import Path
 
 import requests
 
+from kickoffs import apply_kickoffs
 from stadium_info import lookup
 
 ROOT = Path(__file__).resolve().parent
@@ -63,7 +64,11 @@ def load_schedule():
     if not stats_path.exists():
         sys.exit("data/stats_cache.json not found. Run fetch_stats.py first.")
     stats = json.loads(stats_path.read_text())
-    return stats["schedule_this_week"]
+    games = stats["schedule_this_week"]
+    # Flexed games: use the books' kickoff time (kickoffs.py, 2026-11-22).
+    for line in apply_kickoffs(games, DATA_DIR, stats.get("week")):
+        print(f"  kickoff moved: {line}")
+    return games
 
 
 def nearest_hour(gametime_str):

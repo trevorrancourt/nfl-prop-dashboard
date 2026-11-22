@@ -279,10 +279,12 @@ def main():
             continue
         season = int(wb[0][3]["SEASON"].split("=")[1].strip(" ;"))
         # Every game any board that week listed (a Monday-night-only board can be the last one).
+        # Boards are oldest first and the newest time wins: a flexed game's
+        # early boards can carry the old kickoff (2026-11-22, PIT @ PHI).
         ko = {}
         for b in wb:
             for g in json.loads(b[3]["GAMES"].split("=", 1)[1].strip().rstrip(";")):
-                ko.setdefault(g["key"], kickoff_utc(g))
+                ko[g["key"]] = kickoff_utc(g)
         # Opening line per prop: the first board that week that had it.
         opening = {}
         for built, _, f, c in wb:

@@ -20,7 +20,8 @@ from statistics import median
 
 import requests
 
-from team_mapping import to_full
+from kickoffs import save_kickoffs
+from team_mapping import to_abbr, to_full
 
 ROOT = Path(__file__).resolve().parent
 # NFL_DATA_DIR lets run.py build a second board (Monday Night) from its own
@@ -268,6 +269,17 @@ def main():
 
     print("Fetching event list...")
     events = get_events(api_key)
+
+    # Kickoff times as the books post them (2026-11-22, per Trevor: "The
+    # Steelers eagles game time is wrong" -- a flexed game nflverse's
+    # schedule never picked up). The event list is free, so this is saved
+    # before the quota guard; see kickoffs.py. Must never block the pull.
+    try:
+        save_kickoffs(DATA_DIR, week, [
+            (to_abbr(e["away_team"]), to_abbr(e["home_team"]), e.get("commence_time"))
+            for e in events if (e["away_team"], e["home_team"]) in target_games])
+    except Exception as e:
+        print(f"  (couldn't save kickoff times: {e})")
 
     # Quota guard (added 2026-10-15 for the hosted schedule): if the month's
     # Odds API credits are nearly gone, keep the last saved lines instead of

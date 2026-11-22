@@ -14,6 +14,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from kickoffs import apply_kickoffs
 from team_mapping import to_full
 
 ROOT = Path(__file__).resolve().parent
@@ -165,11 +166,18 @@ def normalize_name(name):
     return name
 
 
+KICKOFF_CHANGES = []  # "PIT @ PHI: Sun 4:25p ET -> Sun 1:00p ET", for the run notice
+
+
 def load_caches():
     stats_path = DATA_DIR / "stats_cache.json"
     if not stats_path.exists():
         raise SystemExit("data/stats_cache.json not found. Run fetch_stats.py first.")
     stats = json.loads(stats_path.read_text())
+    # Flexed games (2026-11-22, per Trevor: "The Steelers eagles game time is
+    # wrong"): nflverse's schedule can keep an old kickoff for weeks, so the
+    # books' start times (saved by fetch_odds.py) replace it. See kickoffs.py.
+    KICKOFF_CHANGES.extend(apply_kickoffs(stats.get("schedule_this_week", []), DATA_DIR, stats.get("week")))
 
     odds_path = DATA_DIR / "odds_cache.json"
     odds = json.loads(odds_path.read_text()) if odds_path.exists() else None
@@ -6479,6 +6487,11 @@ def load_track_record():
 
 def main():
     stats, odds, weather, coverage, injuries, injuries_by_team = load_caches()
+    if KICKOFF_CHANGES:
+        msg = "Sportsbook kickoff times replaced the schedule feed's for: " + "; ".join(KICKOFF_CHANGES)
+        print(msg)
+        if __import__("os").environ.get("GITHUB_ACTIONS"):
+            print("::notice title=Kickoff times::" + msg.replace("%", "%25"))
     odds_lookup = build_odds_lookup(odds)
     rows = build_rows(stats, odds_lookup, weather, injuries, injuries_by_team)
     unmatched = sorted(k for k in odds_lookup if k not in MATCHED_ODDS)

@@ -3779,3 +3779,15 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
   - With a signal the other way, the Sharp cell names its own bet (side, line, price, book).
 - Re-scan after the fix: 0 mismatches across ⭐/🔥/🧊, 💡-Over and Sharp-arrow rows.
 
+## Wrong kickoff time for a flexed game (2026-11-22)
+- Trevor, Sunday morning of Week 11: "The Steelers eagles game time is wrong".
+- **Cause:** on Nov 9 the NFL swapped two games. Steelers @ Eagles moved from 4:25 to 1:00 ET and Jaguars @ Giants from 1:00 to 4:25 ET. Both nflverse schedule files (`nfldata` games.csv and the `nflverse-data` schedules release) still had the old times 13 days later, so the board showed both games in the wrong slot.
+  - Also affected: the weather forecast hour for those two games, the My Bets kickoff order, and which saved board counts as "the last one before kickoff" in the look-back and study.
+- **Fix:** kickoff times now come from the sportsbooks' feed when it disagrees with nflverse (`kickoffs.py`).
+  - `fetch_odds.py` saves every game's start time from the event list (free, no extra credits) to `data/kickoffs.json`, before the quota guard.
+  - `build_dashboard.py` and `fetch_weather.py` replace the schedule's day and time when the books differ by 15 minutes or more (and under 4 days, so a later rematch can't be mistaken for this week's game).
+  - A corrected time stays for the rest of the week, and a game that has started keeps the time saved before kickoff.
+  - Each Actions build posts a "Kickoff times" notice listing the games it changed.
+  - `real_line_study.py` now takes each game's kickoff from the newest board that week, not the first. `lookback.py` already used the newest.
+- **Not changed:** the board still shows Eastern times with no zone label. `fetch_stats.py`'s week roll and Monday Night check still use nflverse times.
+- Tested with a faked feed: PIT @ PHI reads "Sun 11/22 1p" and JAX @ NYG "Sun 11/22 4:25p"; the other 11 games unchanged; no page errors.
