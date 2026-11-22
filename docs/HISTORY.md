@@ -3791,3 +3791,4 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
   - `real_line_study.py` now takes each game's kickoff from the newest board that week, not the first. `lookback.py` already used the newest.
 - **Not changed:** the board still shows Eastern times with no zone label. `fetch_stats.py`'s week roll and Monday Night check still use nflverse times.
 - Tested with a faked feed: PIT @ PHI reads "Sun 11/22 1p" and JAX @ NYG "Sun 11/22 4:25p"; the other 11 games unchanged; no page errors.
+- Live check: the first Actions build after the push posted "Kickoff times: JAX @ NYG: Sun 1:00p ET -> Sun 4:25p ET; PIT @ PHI: Sun 4:25p ET -> Sun 1:00p ET", so the books' feed had both moves and nothing else changed.
