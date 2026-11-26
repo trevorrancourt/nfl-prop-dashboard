@@ -1066,6 +1066,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <th data-key="recent_avg" id="th-recent-avg">Avg (L5)</th>
         <th data-key="def_avg_allowed">Opp Allows</th>
         <th data-key="def_rank" title="1 = the toughest defense against this position/stat (allows the least), higher = easier. Color is a red-to-green gradient across the full range, so a rank near either end stands out more the closer it gets to 1 or the max.">Opp Rank</th>
+        <th data-key="def_adj_rank" title="Opp Rank adjusted for who that defense has played. For each of its games in the selected weeks: what it allowed vs what that offense usually gets in its other games this season. 1 = holds offenses furthest under their usual; a high number = gives up more than offenses usually get. So a defense that ranks last only because it just faced the best run teams moves up here. Hover a cell for the games, and for how it did against top-half and bottom-half offenses. Tested on 2019-2025: overall it is about as accurate as Opp Rank. Where the two disagree by 8+ spots, a defense that looked tough only because it faced weak offenses was not tough (it gave up about 7% more than offenses usually get); one that looked soft after facing strong offenses was still a little soft (about 5% more, against 7% when both ranks call it soft). Information only: signals, filters and alerts still use Opp Rank.">Adj Rank</th>
         <th data-key="hit_pct" title="How often HE has cleared the line, on the side shown (O/U), over the selected weeks -- e.g. O 4/4 = over in all 4 games. Hover for his games and his worst game vs the line. Green = 75%+, red = under 50%.">Hit</th>
         <th data-key="def_hit_pct" title="How often THIS DEFENSE has allowed it: each of the opponent's games over the selected weeks, scaled to his usual share of his team's production at his position, checked against the same line. Hover for the per-game numbers.">Opp Hit</th>
         <th data-key="share" title="This player's share of their team's own production at this position/stat, over the selected sample size (RB rushing = RBs only, receiving = same position only)">Team Share</th>
@@ -3702,6 +3703,75 @@ function offenseUsual(key, pos, weeks, off, exclDef, exclWeek) {{
   return g.length ? g.reduce((a, b) => a + b.val, 0) / g.length : null;
 }}
 
+// Adj Rank: Opp Rank adjusted for who the defense played (added 2026-11-26,
+// per Trevor: "if they're 32 against running back runs but they've played
+// the 4 best run teams 4 weeks in a row. It's almost like that's expected").
+// For each of the defense's games in the selected weeks: what it allowed vs
+// what that offense usually gets in its OTHER games -- over the whole season
+// (baseWeeks), so the yardstick isn't just two or three games. Ratio = total
+// allowed / total usual; rank 1 = holds offenses furthest under their usual.
+// Also split by top-half / bottom-half offenses faced (season ranks).
+// Information only: no signal, filter or alert reads it.
+const _adjDefCache = {{}};
+function adjDefenses(key, weeks, baseWeeks) {{
+  const base = baseWeeks || seasonWeeks();
+  const wk = s => Array.from(s).sort((a, b) => a - b).join(',');
+  const ck = key + '|' + wk(weeks) + '|' + wk(base);
+  if (_adjDefCache[ck]) return _adjDefCache[ck];
+  const pos = key.split('|')[0];
+  const logs = DEFENSE_LOGS[key] || {{}};
+  const offRanks = rankOffenses(key, pos, base).ranks;
+  const half = Object.keys(offRanks).length / 2;
+  const tot = gs => gs.reduce((a, g) => [a[0] + g.val, a[1] + g.usual], [0, 0]);
+  const part = gs => {{ const [a, u] = tot(gs); return gs.length && u > 0 ? {{ n: gs.length, ratio: a / u }} : null; }};
+  const info = {{}};
+  for (const [def, log] of Object.entries(logs)) {{
+    const meta = (DEFENSE_GAMES[def] && DEFENSE_GAMES[def][pos]) || [];
+    const games = [];
+    for (const i of defenseSelectedIndices(meta, weeks)) {{
+      const off = meta[i] && meta[i].vs;
+      if (!off || log[i] === undefined || log[i] === null) continue;
+      const usual = offenseUsual(key, pos, base, off, def, meta[i].week);
+      if (usual === null) continue;
+      games.push({{ vs: off, week: meta[i].week, val: log[i], usual, offRank: offRanks[off] }});
+    }}
+    const [allowed, usual] = tot(games);
+    if (!games.length || !(usual > 0)) continue;
+    info[def] = {{
+      games: games.sort((a, b) => b.week - a.week),
+      allowed: allowed / games.length, usual: usual / games.length, ratio: allowed / usual,
+      top: part(games.filter(g => g.offRank && g.offRank <= half)),
+      bottom: part(games.filter(g => g.offRank && g.offRank > half)),
+    }};
+  }}
+  const entries = Object.entries(info).sort((a, b) => a[1].ratio - b[1].ratio);
+  const ranks = {{}};
+  for (let i = 0; i < entries.length; i++) {{
+    const [team, v] = entries[i];
+    ranks[team] = (i > 0 && entries[i - 1][1].ratio === v.ratio) ? ranks[entries[i - 1][0]] : i + 1;
+  }}
+  return (_adjDefCache[ck] = {{ info, ranks }});
+}}
+function vsUsualText(ratio) {{
+  const p = Math.round((ratio - 1) * 100);
+  return p === 0 ? 'right at their usual' : Math.abs(p) + '% ' + (p < 0 ? 'under' : 'over') + ' their usual';
+}}
+// One table cell: the adjusted rank, colored like Opp Rank, with the games in the hover.
+function adjRankTd(team, pos, label, a, rank, max, rawRank, showPct) {{
+  if (!a || rank === null || rank === undefined) return '<td class="muted">-</td>';
+  const r1 = v => Math.round(v * 10) / 10;
+  const halves = [a.top ? `vs top-half offenses (${{a.top.n}}): ${{vsUsualText(a.top.ratio)}}` : '',
+                  a.bottom ? `vs bottom-half offenses (${{a.bottom.n}}): ${{vsUsualText(a.bottom.ratio)}}` : ''].filter(Boolean).join('; ');
+  const tip = [
+    `${{team}} against ${{pos}} ${{label}}, adjusted for who it played: ${{rank}} of ${{max}}` + (rawRank ? ` (Opp Rank ${{rawRank}})` : '') + '. 1 = toughest.',
+    `Allowed ${{r1(a.allowed)}} a game. Those offenses usually get ${{r1(a.usual)}}, so ${{team}} was ${{vsUsualText(a.ratio)}}.`,
+    halves ? halves + '.' : '',
+    'Games: ' + a.games.map(g => `Wk${{g.week}} ${{g.vs}}${{g.offRank ? ' #' + g.offRank : ''}} ${{r1(g.val)}} (usually ${{r1(g.usual)}})`).join(', ') + '.',
+    '"Usually" = what that offense averages in its other games this season; #N = its rank (1 = produces the most). Information only: signals, filters and alerts still use Opp Rank.',
+  ].filter(Boolean).join('\\n');
+  return `<td ${{rankStyle(rank, max)}} title="${{escapeHtml(tip)}}">${{rank}}${{showPct ? ` <span class="muted" style="font-weight:400;">(${{vsUsualText(a.ratio)}})</span>` : ''}}</td>`;
+}}
+
 // Matchup mismatch (added 2026-10-16, per Trevor: "atlanta allows a lot of
 // yards to good run offenses and holds bad ones in check. don't tell me to
 // go under when chicago is a huge run offense"). Offenses are ranked by
@@ -4021,6 +4091,7 @@ function enrichRow(r, weeks, defCache) {{
   const key = r.position + '|' + r.stat_col;
   if (!defCache[key]) defCache[key] = rankDefenses(key, weeks);
   const {{ avgs, ranks }} = defCache[key];
+  const adjDef = adjDefenses(key, weeks); // Adj Rank: information only
   const defAvg = avgs[r.opponent];
   const defAvgRounded = (defAvg === undefined || defAvg === null) ? null : Math.round(defAvg * 100) / 100;
   const derived = deriveStats(r, weeks);
@@ -4436,6 +4507,9 @@ function enrichRow(r, weeks, defCache) {{
     def_avg_allowed: defAvgRounded,
     def_rank: ranks[r.opponent] === undefined ? null : ranks[r.opponent],
     def_rank_max: Object.keys(ranks).length,
+    def_adj: adjDef.info[r.opponent] || null,
+    def_adj_rank: adjDef.ranks[r.opponent] === undefined ? null : adjDef.ranks[r.opponent],
+    def_adj_max: Object.keys(adjDef.ranks).length,
     anticipated: anticipated,
     anc_edge: ancEdge,
     anc_edge_pct: ancEdgePct,
@@ -4562,6 +4636,7 @@ function render() {{
       <td>${{fmt(r.recent_avg)}}</td>
       <td>${{fmt(r.def_avg_allowed)}}</td>
       <td ${{rankStyle(r.def_rank, r.def_rank_max)}}>${{fmt(r.def_rank)}}</td>
+      ${{adjRankTd(r.opponent, r.position, r.stat_label, r.def_adj, r.def_adj_rank, r.def_adj_max, r.def_rank)}}
       <td>${{hitCellHtml(r, 'p')}}</td>
       <td>${{hitCellHtml(r, 'd')}}</td>
       <td>${{fmt(r.share, '%')}}</td>
@@ -4711,6 +4786,7 @@ function openPlayerModal(playerName) {{
       <td>${{fmt(r.recent_avg)}}</td>
       <td>${{fmt(r.def_avg_allowed)}}</td>
       <td ${{rankStyle(r.def_rank, r.def_rank_max)}}>${{fmt(r.def_rank)}}</td>
+      ${{adjRankTd(r.opponent, r.position, r.stat_label, r.def_adj, r.def_adj_rank, r.def_adj_max, r.def_rank)}}
       <td>${{hitCellHtml(r, 'p')}}</td>
       <td>${{hitCellHtml(r, 'd')}}</td>
       <td>${{fmt(r.share, '%')}}</td>
@@ -4829,7 +4905,7 @@ function openPlayerModal(playerName) {{
     <div class="modal-table-wrap">
     <table class="modal-table">
       <thead><tr>
-        <th>Mark</th><th>Stat</th><th>Avg (${{weeksLabel(selectedWeeks)}})</th><th>Opp Allows</th><th>Opp Rank</th><th>Hit</th><th>Opp Hit</th>
+        <th>Mark</th><th>Stat</th><th>Avg (${{weeksLabel(selectedWeeks)}})</th><th>Opp Allows</th><th>Opp Rank</th><th>Adj Rank</th><th>Hit</th><th>Opp Hit</th>
         <th>Team Share</th><th>Anticipated</th><th>Edge</th><th>Anc. Edge</th><th>&#128293;/&#129482;/&#11088;</th><th class="win-col">Win % / Need / Edge</th>
         <th>DraftKings</th><th>FanDuel</th><th>BetMGM</th><th>Sharp</th>
       </tr></thead>
@@ -4957,11 +5033,13 @@ function openDefenseModal(team, clickedPos) {{
       const avg = avgs[team];
       const rank = ranks[team];
       const rankMax = Object.keys(ranks).length;
+      const adj = adjDefenses(key, selectedWeeks);
       summaryRows += `
       <tr>
         <td>${{label}}</td>
         <td>${{fmt(avg === undefined || avg === null ? null : Math.round(avg * 100) / 100)}}</td>
         <td ${{rankStyle(rank === undefined ? null : rank, rankMax)}}>${{fmt(rank === undefined ? null : rank)}}</td>
+        ${{adjRankTd(team, pos, label, adj.info[team], adj.ranks[team], Object.keys(adj.ranks).length, rank, true)}}
         ${{nextOff ? upcomingOffCell(key, pos, label, nextOff) : ''}}
       </tr>`;
     }}
@@ -5014,11 +5092,11 @@ function openDefenseModal(team, clickedPos) {{
     <h3 class="modal-section-title">${{pos}} allowed</h3>
     <div class="modal-table-wrap">
     <table class="modal-table">
-      <thead><tr><th>Stat</th><th>Avg Allowed (${{weeksLabel(selectedWeeks)}})</th><th>Rank</th>${{nextOff ? `<th title="What the offense ${{team}} plays this week produces per game at this position/stat, and its rank among offenses (1 = produces the most).">This week: ${{nextOff}} offense</th>` : ''}}</tr></thead>
+      <thead><tr><th>Stat</th><th>Avg Allowed (${{weeksLabel(selectedWeeks)}})</th><th>Rank</th><th title="Rank adjusted for who ${{team}} played: what it allowed vs what each offense usually gets in its other games this season. 1 = toughest. Hover a number for the games.">Adj Rank</th>${{nextOff ? `<th title="What the offense ${{team}} plays this week produces per game at this position/stat, and its rank among offenses (1 = produces the most).">This week: ${{nextOff}} offense</th>` : ''}}</tr></thead>
       <tbody>${{summaryRows}}</tbody>
     </table>
     </div>
-    <div class="modal-note">${{nextOff ? `Top row (highlighted) = ${{nextOff}}, the offense ${{team}} plays this week: its own per-game average and rank, to compare with the offenses below. ` : ''}}Every game this season is listed; <strong>bold</strong> = ${{weeksLabel(selectedWeeks)}}, the weeks the picks use. #N next to each number = how the offense ${{team}} faced that week ranks at producing that stat for ${{pos}}s (1 = produces the most). <span class="opp-rank-chip off-hi">orange</span> = one of the ${{OFF_RANK_EDGE}} highest-volume offenses, <span class="opp-rank-chip off-lo">blue</span> = one of the ${{OFF_RANK_EDGE}} lowest -- a small number allowed to a blue offense says little about this defense. Hover for that offense's usual output.</div>
+    <div class="modal-note">${{nextOff ? `Top row (highlighted) = ${{nextOff}}, the offense ${{team}} plays this week: its own per-game average and rank, to compare with the offenses below. ` : ''}}Adj Rank = the rank after allowing for who it played (what it allowed vs what each offense usually gets in its other games this season; hover it for the games). Every game this season is listed; <strong>bold</strong> = ${{weeksLabel(selectedWeeks)}}, the weeks the picks use. #N next to each number = how the offense ${{team}} faced that week ranks at producing that stat for ${{pos}}s (1 = produces the most). <span class="opp-rank-chip off-hi">orange</span> = one of the ${{OFF_RANK_EDGE}} highest-volume offenses, <span class="opp-rank-chip off-lo">blue</span> = one of the ${{OFF_RANK_EDGE}} lowest -- a small number allowed to a blue offense says little about this defense. Hover for that offense's usual output.</div>
     <div class="modal-table-wrap">
     <table class="modal-table">
       <thead><tr><th>Game</th>${{gameHeaderCells}}</tr></thead>
@@ -5857,6 +5935,10 @@ function startColResize(e) {{
   document.addEventListener('mousemove', move);
   document.addEventListener('mouseup', up);
 }}
+// Columns added to the table over time, oldest first. A layout saved before
+// one existed gets it inserted at its default spot (next to its neighbor),
+// instead of the saved order and widths being wiped. Add each new column's key here.
+const COLS_ADDED = ['win_edge', 'sharp_edge', 'def_adj_rank'];
 function initColumns() {{
   const headTr = colHeaderRow();
   if (!headTr) return;
@@ -5867,16 +5949,28 @@ function initColumns() {{
   // instead of wiping the saved layout.
   if (Array.isArray(colState.order) && colState.order.length < n && colState.order.every(c => c >= 0 && c < colState.order.length)) {{
     const old = colState.order.length;
-    for (let c = old; c < n; c++) colState.order.push(c);
     const added = n - old;
-    const insertAt = Array.from(headTr.children).findIndex(th => th.dataset.key === 'sharp_edge'); // the newest column (was 'win_edge' when that one was added)
-    if (insertAt >= 0 && added === 1) {{
-      colState.order = colState.order.slice(0, old).map(c => c >= insertAt ? c + 1 : c);
-      const pos = colState.order.findIndex(c => c === insertAt + 1);
-      colState.order.splice(pos >= 0 ? pos : colState.order.length, 0, insertAt);
-      const w = {{}};
-      for (const [k, v] of Object.entries(colState.widths || {{}})) w[parseInt(k, 10) >= insertAt ? parseInt(k, 10) + 1 : k] = v;
-      colState.widths = w;
+    const keys = ths.map(th => th.dataset.key);
+    const newKeys = COLS_ADDED.slice(-added);
+    if (added <= COLS_ADDED.length && newKeys.every(k => keys.indexOf(k) >= 0)) {{
+      let order = colState.order.slice(), widths = Object.assign({{}}, colState.widths || {{}});
+      newKeys.forEach((k, j) => {{
+        const cur = keys.indexOf(k);
+        // Where it sat when it was added: today's spot, minus the later columns in front of it.
+        const insertAt = cur - newKeys.slice(j + 1).filter(k2 => keys.indexOf(k2) < cur).length;
+        order = order.map(c => c >= insertAt ? c + 1 : c);
+        // Right after the column that sits to its left by default (Adj Rank
+        // next to Opp Rank), wherever that column has been dragged to.
+        const pos = order.findIndex(c => c === insertAt - 1);
+        order.splice(pos >= 0 ? pos + 1 : 0, 0, insertAt);
+        const w = {{}};
+        for (const [kk, v] of Object.entries(widths)) w[parseInt(kk, 10) >= insertAt ? parseInt(kk, 10) + 1 : kk] = v;
+        widths = w;
+      }});
+      colState.order = order;
+      colState.widths = widths;
+    }} else {{
+      for (let c = old; c < n; c++) colState.order.push(c);
     }}
   }}
   const ok = Array.isArray(colState.order) && colState.order.length === n &&
@@ -5963,6 +6057,8 @@ function myRulesHtml() {{
       'The board is back to the original look: the signal column shows <b>&#11088; MUST BET</b>, <b>&#128293;&#128293;&#128293; / &#129482;&#129482;&#129482;</b>, <b>&#128161;</b> and <b>&#10067;</b>, with &#128197; (the full season agrees) and the game-script check next to it. You make the calls; the board lays out the information. The Best / Next / More tags, the &#128064; Look flags and the Steady-starters box (Nov 10-13) were taken off after Week 10, when that ranked list went 7-14. Phone alerts still come from the three best-priced MUST BETs.',
     ]) + sec('Sharp price (2026-11-17)', [
       'The <b>Sharp</b> column shows what the sharp books say about a prop: Pinnacle (which takes professional bets) and the Novig and ProphetX exchanges, with their juice removed -- their line and the fair chance of the Over. When your best price at DraftKings, FanDuel or BetMGM beats that fair chance by 2 points or more, an arrow (&#9650; Over / &#9660; Under) and the gap show up; hover for the detail. If your line is better than the sharp line the gap reads as "at least". It costs no extra credits. <b>Information only</b>: there is no history for these books yet, so it is untested; it is not a signal and never buzzes your phone. It gets graded after two or three weeks.',
+    ]) + sec('Adjusted defense rank (2026-11-26)', [
+      'The <b>Adj Rank</b> column is Opp Rank adjusted for who the defense has played. For each of its games in the selected weeks it compares what the defense allowed with what that offense usually gets in its other games this season, then ranks every defense on that (1 = holds offenses furthest under their usual). A defense that ranks last only because it just faced the best run teams moves up; one that looks tough only because it faced weak offenses moves down. Hover the number for the games, and for how it did against top-half and bottom-half offenses. Tested on 2019-2025 (21,000 defense-games): overall it is about as accurate as Opp Rank, no better. It earns its place where the two disagree by 8+ spots: a defense that looked tough only because it faced weak offenses was not tough (it gave up about 7% more than offenses usually get), and one that looked soft after facing strong offenses was still a little soft (about 5% more, against 7% when both ranks call it soft). Information only: signals, filters and alerts still use Opp Rank.',
     ]) + sec('Your reasons (2026-11-11)', [
       'A &#128221; next to a marked row (and a Why line in My Bets) shows what you entered; tap the &#128221; to change it. When you mark a row &#10060; Pass or &#9989; Bet, a box opens: say why in your own words, tap a tag, or both. It is saved with your marks (synced to your account, included in the My Bets backup) together with what the board said at that moment. Each week you paste the backup to me: I grade every reason against what actually happened (would the board\u2019s side have won?) and turn the ones that keep being right into rules. Nothing changes the model by itself.',
     ]) + sec('The groups', [

@@ -3792,3 +3792,22 @@ Trevor: "go with the changes. any other suggestions? Also can we test the bet re
 - **Not changed:** the board still shows Eastern times with no zone label. `fetch_stats.py`'s week roll and Monday Night check still use nflverse times.
 - Tested with a faked feed: PIT @ PHI reads "Sun 11/22 1p" and JAX @ NYG "Sun 11/22 4:25p"; the other 11 games unchanged; no page errors.
 - Live check: the first Actions build after the push posted "Kickoff times: JAX @ NYG: Sun 1:00p ET -> Sun 4:25p ET; PIT @ PHI: Sun 4:25p ET -> Sun 1:00p ET", so the books' feed had both moves and nothing else changed.
+
+## Adj Rank: defense rank adjusted for who it played (2026-11-26)
+- Trevor: "Could we make a metric where it like shows defense performance against like good teams and bad teams? ... if they're 32 against running back runs but they've played the 4 best run teams 4 weeks in a row. It's almost like that's expected".
+- **Built:** an "Adj Rank" column right after Opp Rank.
+  - For each of the defense's games in the selected weeks, it compares what the defense allowed with what that offense usually gets in its other games this season.
+  - Total allowed / total usual, ranked across the league. 1 = holds offenses furthest under their usual.
+  - The hover lists each game (offense, its rank, allowed, usual) and how the defense did against top-half and bottom-half offenses.
+  - Also in the player popup and the defense popup (which adds "% under/over their usual").
+  - The offense's "usual" uses the whole season, not just the selected weeks, so it isn't built on two or three games.
+- **Information only.** Signals, the matchup filters, 🎯 and alerts still use Opp Rank.
+- **Saved column layouts** keep their order and widths; the new column is placed right after Opp Rank wherever that was dragged. The insert now handles a layout that is several columns behind (`COLS_ADDED`).
+- **Backtest** (`scripts/backtest_adj_rank.py`, 2019-2025, weeks 6-18, eight position/stats, last-4 window, 21,110 defense-games). Outcome = what the defense allowed that week / what that week's offense usually gets.
+  - Overall the two ranks are equally accurate: Spearman +0.092 (Opp Rank) vs +0.096 (Adj Rank). By quarter of the rank: toughest 0.964 vs 0.956, softest 1.068 vs 1.071. Same in 2019-2022 (+0.085 / +0.091) and 2023-2025 (+0.102 / +0.104).
+  - They rarely disagree much. When they do, by 8+ spots:
+    - Looks tough on Opp Rank, adjusted softer (faced weak offenses), n=359: allowed 1.07x the offense's usual. When both ranks say tough: 0.955x. The "tough" tag was wrong.
+    - Looks soft on Opp Rank, adjusted tougher (faced strong offenses, Trevor's example), n=469: allowed 1.05x. When both say soft: 1.07x. Still a little soft; the schedule explains about half of it.
+    - RB rush yds only, soft-but-adjusted-tougher: 0.92x on 39 games, against 1.14x when both say soft. It fits his hunch for that stat but the sample is small.
+  - Not used in any rule. The piece with support is a warning on "tough" defenses that only faced weak offenses.
+- Tested: 23 columns in every row, no page errors, sort works, both popups show it; saved layouts from before this column, before Sharp and before Win % all keep their order and widths. Blank only for Air Yards (the offenses' usual can be zero or negative).
